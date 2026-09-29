@@ -8,6 +8,7 @@
     {
       "id": "hdfilmcehennemi",
       "name": "!HDFilmCehennemi",
+      "logo": "https://www.google.com/s2/favicons?domain=hdfilmcehennemi.com\u0026sz=%size%",
       "version": "0.1.0",
       "filename": "hdfilmcehennemi.js",
       "supportedTypes": [
@@ -21,6 +22,7 @@
     {
       "id": "filmmakinesi",
       "name": "!FilmMakinesi",
+      "logo": "https://www.google.com/s2/favicons?domain=filmmakinesi.to\u0026sz=%size%",
       "version": "0.1.0",
       "filename": "filmmakinesi.js",
       "supportedTypes": [
@@ -34,6 +36,7 @@
     {
       "id": "diziyou",
       "name": "!DiziYou",
+      "logo": "https://www.google.com/s2/favicons?domain=diziyou.one\u0026sz=%size%",
       "version": "0.1.0",
       "filename": "diziyou.js",
       "supportedTypes": [
@@ -46,6 +49,7 @@
     {
       "id": "sinewix",
       "name": "!SineWix",
+      "logo": "https://www.google.com/s2/favicons?domain=sinewix.com\u0026sz=%size%",
       "version": "0.1.0",
       "filename": "sinewix.js",
       "supportedTypes": [
