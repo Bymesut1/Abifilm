@@ -10,7 +10,7 @@
       "name": "!HDFilmCehennemi",
       "logo": "https://www.google.com/s2/favicons?domain=hdfilmcehennemi.com\u0026sz=%size%",
       "version": "0.1.0",
-      "filename": "hdfilmcehennemi.js",
+      "filename": "providers/hdfilmcehennemi.js",
       "supportedTypes": [
         "movie",
         "tv"
@@ -24,7 +24,7 @@
       "name": "!FilmMakinesi",
       "logo": "https://www.google.com/s2/favicons?domain=filmmakinesi.to\u0026sz=%size%",
       "version": "0.1.0",
-      "filename": "filmmakinesi.js",
+      "filename": "providers/filmmakinesi.js",
       "supportedTypes": [
         "movie",
         "tv"
@@ -38,7 +38,7 @@
       "name": "!DiziYou",
       "logo": "https://www.google.com/s2/favicons?domain=diziyou.one\u0026sz=%size%",
       "version": "0.1.0",
-      "filename": "diziyou.js",
+      "filename": "providers/diziyou.js",
       "supportedTypes": [
         "tv"
       ],
@@ -51,7 +51,7 @@
       "name": "!SineWix",
       "logo": "https://www.google.com/s2/favicons?domain=sinewix.com\u0026sz=%size%",
       "version": "0.1.0",
-      "filename": "sinewix.js",
+      "filename": "providers/sinewix.js",
       "supportedTypes": [
         "movie",
         "tv"
