@@ -1,13 +1,15 @@
 {
+  "id": "app.manitux.nuvio.plugins",
   "name": "Manitux Nuvio Plugins",
-  "version": "0.1.3",
+  "logo": "https://raw.githubusercontent.com/manitux-app/cs-plugins/main/images/icon.png",
+  "version": "0.1.1",
   "author": "manitux",
   "scrapers": [
     {
       "id": "hdfilmcehennemi",
       "name": "!HDFilmCehennemi",
-      "version": "0.1.3",
-      "filename": "providers/hdfilmcehennemi.js",
+      "version": "0.1.0",
+      "filename": "hdfilmcehennemi.js",
       "supportedTypes": [
         "movie",
         "tv"
@@ -19,8 +21,8 @@
     {
       "id": "filmmakinesi",
       "name": "!FilmMakinesi",
-      "version": "0.1.3",
-      "filename": "providers/filmmakinesi.js",
+      "version": "0.1.0",
+      "filename": "filmmakinesi.js",
       "supportedTypes": [
         "movie",
         "tv"
@@ -32,8 +34,8 @@
     {
       "id": "diziyou",
       "name": "!DiziYou",
-      "version": "0.1.1",
-      "filename": "providers/diziyou.js",
+      "version": "0.1.0",
+      "filename": "diziyou.js",
       "supportedTypes": [
         "tv"
       ],
@@ -45,7 +47,7 @@
       "id": "sinewix",
       "name": "!SineWix",
       "version": "0.1.0",
-      "filename": "providers/sinewix.js",
+      "filename": "sinewix.js",
       "supportedTypes": [
         "movie",
         "tv"
