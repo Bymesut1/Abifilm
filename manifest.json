@@ -1,14 +1,14 @@
 {
-  "id": "app.manitux.nuvio.plugins",
-  "name": "Manitux Nuvio Plugins",
-  "logo": "https://raw.githubusercontent.com/manitux-app/cs-plugins/main/images/icon.png",
-  "version": "0.1.4",
-  "author": "manitux",
+  "id": "app.bymesut1.yenifilm",
+  "name": "Yeni Film Plugins",
+  "logo": "https://raw.githubusercontent.com/Bymesut1/Yeni-film/main/images/icon.png",
+  "version": "0.1.0",
+  "author": "Bymesut1",
   "scrapers": [
     {
       "id": "hdfilmcehennemi",
-      "name": "!HDFilmCehennemi",
-      "logo": "https://www.google.com/s2/favicons?domain=hdfilmcehennemi.com\u0026sz=%size%",
+      "name": "HDFilmCehennemi",
+      "logo": "https://www.google.com/s2/favicons?domain=hdfilmcehennemi.com&sz=%size%",
       "version": "0.1.0",
       "filename": "providers/hdfilmcehennemi.js",
       "supportedTypes": [
@@ -17,7 +17,6 @@
       ],
       "contentLanguage": [
         "tr"
-      
       ]
     }
   ]
