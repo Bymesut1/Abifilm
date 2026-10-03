@@ -1,7 +1,8 @@
-# nuvio-plugins
+# yeni-fim
 Nuvio için Türkçe içerik sağlayıcı eklentileri
 
-Url: https://raw.githubusercontent.com/manitux-app/nuvio-plugins/refs/heads/main/manifest.json
+Url: https://raw.githubusercontent.com/Bymesut1/Yeni-film/main/manifest.json
+
 
 ## Destek ve Bağış
 
