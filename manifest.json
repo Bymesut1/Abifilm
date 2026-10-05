@@ -2,10 +2,12 @@
   "name": "Abi Film",
   "description": "Abi Film Nuvio Eklentisi",
   "version": "1.0.0",
-  "providers": [
+  "addons": [
     {
       "id": "filmdozu",
       "name": "Abi Film",
+      "version": "1.0.0",
+      "description": "FilmDozu ve Vmbox dinamik akış sağlayıcısı.",
       "types": ["movie", "tv"],
       "filename": "providers/filmdozu.js"
     }
