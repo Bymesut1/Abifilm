@@ -142,6 +142,73 @@ function extractSources(html) {
   return list;
 }
 
+// p.a.c.k.e.r ile sıkıştırılmış JS'i açar (Vidmoly gibi siteler kullanır)
+function unpackPacked(src) {
+  var m = src.match(/eval\(function\(p,a,c,k,e,d\)\{[\s\S]*?\}\('([\s\S]*?)',(\d+),(\d+),'([\s\S]*?)'\.split\('\|'\)/);
+  if (!m) return '';
+  var p = m[1].replace(/\\'/g, "'").replace(/\\\\/g, '\\');
+  var a = parseInt(m[2], 10), c = parseInt(m[3], 10), k = m[4].split('|');
+  function enc(n) {
+    return (n < a ? '' : enc(Math.floor(n / a))) +
+           ((n = n % a) > 35 ? String.fromCharCode(n + 29) : n.toString(36));
+  }
+  var d = {};
+  while (c--) d[enc(c)] = k[c] || enc(c);
+  return p.replace(/\b\w+\b/g, function (w) { return d[w] !== undefined ? d[w] : w; });
+}
+
+function findStreamUrl(text) {
+  text = String(text || '').replace(/\\\//g, '/').replace(/&amp;/g, '&');
+  var all = text.match(/https?:\/\/[^"'\s\\<>]+\.m3u8[^"'\s\\<>]*/g) || [];
+  if (all.length) {
+    var pick = all[0];
+    for (var i = 0; i < all.length; i++) {
+      if (/master/i.test(all[i])) { pick = all[i]; break; }
+    }
+    return { url: pick, type: 'hls', quality: 'Auto' };
+  }
+  var f = text.match(/file\s*:\s*["']([^"']+\.mp4[^"']*)["']/);
+  if (f) return { url: f[1], type: 'mp4', quality: 'Auto' };
+  return null;
+}
+
+// Vidmoly embed sayfasından (her seferinde yeni, süreli) m3u8 adresini çıkarır
+async function resolveVidmoly(embedUrl) {
+  var clean = embedUrl.split('?')[0];
+  var tries = [clean];
+  var biz = clean.replace(/^https?:\/\/[^\/]+/, 'https://vidmoly.biz');
+  if (biz !== clean) tries.push(biz);
+
+  for (var t = 0; t < tries.length; t++) {
+    var html = await getText(tries[t], {
+      'User-Agent': ANDROID_UA,
+      'Accept': 'text/html,*/*;q=0.8',
+      'Accept-Language': 'tr-TR,tr;q=0.9',
+      'Referer': PRIMARY_DOMAIN + '/'
+    });
+    if (!html) continue;
+    var found = findStreamUrl(html);
+    if (!found) {
+      var unpacked = unpackPacked(html);
+      if (unpacked) found = findStreamUrl(unpacked);
+    }
+    if (found) {
+      var ref = /vidmoly\./.test(tries[t]) ? 'https://vidmoly.biz/'
+        : ((tries[t].match(/^https?:\/\/[^\/]+/) || [''])[0] + '/');
+      found.headers = { 'User-Agent': ANDROID_UA, 'Referer': ref };
+      return found;
+    }
+  }
+  console.log('[FilmDozu] embed içinde m3u8 bulunamadı: ' + clean);
+  return null;
+}
+
+// Adrese göre doğru çözücüyü seçer
+async function resolveSource(url) {
+  if (/ok\.ru/.test(url)) return resolveOk(url);
+  return resolveVidmoly(url);
+}
+
 // ok.ru embed sayfasından gerçek yayın adresini çıkarır
 async function resolveOk(embedUrl) {
   var clean = embedUrl.split('?')[0];
@@ -175,37 +242,6 @@ async function resolveOk(embedUrl) {
   return null;
 }
 
-// vidmoly embed sayfasından master.m3u8 adresini çıkarır
-async function resolveVidmoly(embedUrl) {
-  var clean = embedUrl.split('?')[0];
-  var origin = (clean.match(/^https?:\/\/[^\/]+/) || ['https://vidmoly.net'])[0];
-  var html = await getText(clean, {
-    'User-Agent': ANDROID_UA,
-    'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
-    'Referer': PRIMARY_DOMAIN + '/'
-  });
-  if (!html) return null;
-
-  // sources: [{ file: 'https://....m3u8?...' }]
-  var m = html.match(/file\s*:\s*['"]([^'"]+\.m3u8[^'"]*)['"]/) ||
-          html.match(/(https?:\/\/[^'"\s\\]+\.m3u8[^'"\s\\]*)/);
-  if (!m) return null;
-
-  var url = decodeHtml(m[1]).replace(/\\\//g, '/');
-  return { url: url, type: 'hls', quality: 'Auto', referer: origin + '/' };
-}
-
-// Adrese göre doğru çözücüyü seçer
-async function resolveSource(url) {
-  if (/ok\.ru/.test(url)) {
-    var r = await resolveOk(url);
-    if (r) r.referer = 'https://ok.ru/';
-    return r;
-  }
-  if (/vidmoly\./.test(url)) return resolveVidmoly(url);
-  return null;
-}
-
 async function getStreams(tmdbId, mediaType, season, episode) {
   try {
     // Site sadece film içeriyor
@@ -230,9 +266,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
     // 3) Sayfadaki kaynakları al, 4) hepsini aynı anda çöz
     var sources = extractSources(found.html);
-    var resolved = await Promise.all(sources.map(function (s) {
-      return resolveSource(s.url).catch(function () { return null; });
-    }));
+    var resolved = await Promise.all(sources.map(function (s) { return resolveSource(s.url); }));
     var streams = [];
     for (var i = 0; i < sources.length; i++) {
       var r = resolved[i];
@@ -243,7 +277,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         url: r.url,
         quality: r.quality,
         type: r.type,
-        headers: { 'User-Agent': ANDROID_UA, 'Referer': r.referer || 'https://ok.ru/' }
+        headers: r.headers || { 'User-Agent': ANDROID_UA, 'Referer': 'https://ok.ru/' }
       });
     }
     return streams;
