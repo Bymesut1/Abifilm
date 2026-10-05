@@ -2,18 +2,17 @@
   "id": "abifilm.nuvio.plugins",
   "name": "Abi Film Plugin",
   "logo": "https://raw.githubusercontent.com/Bymesut1/Abifilm/refs/heads/main/images/icon.png",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Bymesut",
   "scrapers": [
     {
       "id": "filmdozu",
       "name": "Abi Film",
       "logo": "https://www.google.com/s2/favicons?domain=filmdozu.com&sz=%size%",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "filename": "providers/filmdozu.js",
       "supportedTypes": [
-        "movie",
-        "tv"
+        "movie"
       ],
       "contentLanguage": [
         "tr"
