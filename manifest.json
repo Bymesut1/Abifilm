@@ -8,7 +8,7 @@
     {
       "id": "filmdozu",
       "name": "FilmDozu",
-      "logo": "https://www.google.com/s2/favicons?domain=filmdozu.com&sz=%size%",
+      "logo": "https://www.google.com/s2/favicons?domain=filmdozu.com&sz=64",
       "version": "0.1.0",
       "filename": "providers/filmdozu.js",
       "supportedTypes": [
