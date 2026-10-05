@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Tüm Kaynakları Çeken Kapsamlı Sürüm)
+//  FilmDozu — Nuvio Provider (En Güncel Kesin Çözüm Sürümü)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -33,21 +33,20 @@ function slugify(text) {
 
 function fetchTmdbInfo(tmdbId, mediaType) {
   var ep = mediaType === 'tv' ? 'tv' : 'movie';
-  return fetch('https://api.themoviedb.org/3/' + ep + '/' + tmdbId + '?api_key=' + TMDB_API_KEY + '&language=tr-TR')
+  return fetch('https://api.themoviedb.org/3/' + ep + '/' + tmdbId + '?api_key=' + TMDB_API_KEY + '&language=en-US')
     .then(function(r) { return r.json(); })
     .then(function(d) {
       return {
-        titleTr: d.title || d.name || '',
-        titleEn: d.original_title || d.original_name || ''
+        title: d.title || d.name || d.original_title || d.original_name || ''
       };
     })
-    .catch(function() { return { titleTr: '', titleEn: '' }; });
+    .catch(function() { return { title: '' }; });
 }
 
 function getStreams(tmdbId, mediaType, season, episode) {
   var fallbackStream = {
     name: 'FilmDozu',
-    title: '⌜ FILMDOZU ⌟ | Alternatif Kaynak Bekleniyor',
+    title: '⌜ FILMDOZU ⌟ | Güncel Akış Bekleniyor',
     url: 'https://box-1097-y.vmbox.space/hls/xqx2o7ndpzokjiqbthkcpkqnuulsql4b3dgcr6d4z,y4ioiavo425vuaasaaa,q4ioiavo425elsjoxmq,.urlset/master.m3u8',
     quality: '1080p',
     type: 'hls',
@@ -57,17 +56,16 @@ function getStreams(tmdbId, mediaType, season, episode) {
     }
   };
 
-  return fetchTmdbInfo(tmdbId, mediaType).then(function(mediaInfo) {
-    var queryTitle = mediaInfo.titleTr || mediaInfo.titleEn;
-    if (!queryTitle) {
+  return fetchTmdbInfo(tmdbId, mediaType).then(function(info) {
+    if (!info.title) {
       return [fallbackStream];
     }
 
-    var slug = slugify(queryTitle);
-    var targetUrl = PRIMARY_DOMAIN + '/' + slug + '-izle/';
+    var cleanSlug = slugify(info.title);
+    var targetUrl = PRIMARY_DOMAIN + '/' + cleanSlug + '-izle/';
 
     if (mediaType === 'tv' && season && episode) {
-      targetUrl = PRIMARY_DOMAIN + '/' + slug + '-sezon-' + season + '-bolum-' + episode + '-izle/';
+      targetUrl = PRIMARY_DOMAIN + '/' + cleanSlug + '-sezon-' + season + '-bolum-' + episode + '-izle/';
     }
 
     return fetch(targetUrl, { headers: PAGE_HEADERS })
@@ -77,27 +75,31 @@ function getStreams(tmdbId, mediaType, season, episode) {
         }
         return r.text();
       })
-      .then(function(pageHtml) {
-        if (typeof pageHtml !== 'string' || !pageHtml) {
+      .then(function(html) {
+        if (typeof html !== 'string' || !html) {
           return [fallbackStream];
         }
 
-        // Sitede karşılaşılabilecek tüm olası video kaynaklarını (Okru, M3U8, VidMoly, İframe kaynakları vb.) tarıyoruz
-        var match = pageHtml.match(/(https?:\/\/[^"'\s]+\.okcdn\.ru[^"'\s]*)/i)
-                 || pageHtml.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i)
-                 || pageHtml.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i)
-                 || pageHtml.match(/src="(https?:\/\/[^"'\s]+embed[^"'\s]*)"/i)
-                 || pageHtml.match(/src="(https?:\/\/[^"'\s]+player[^"'\s]*)"/i);
+        // Sitenin kalıplaşmış hata veya sabit yönlendirme döngüsünü engellemek için kontrol
+        if (html.indexOf('Yuzuklerin Efendisi') !== -1 && cleanSlug.indexOf('yuzuklerin-efendisi') === -1) {
+          return [fallbackStream];
+        }
 
-        if (!match) {
+        // Sayfa içerisindeki tüm olası video/oynatıcı kaynaklarını dinamik yakala
+        var videoMatch = html.match(/(https?:\/\/[^"'\s]+\.okcdn\.ru[^"'\s]*)/i)
+                      || html.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i)
+                      || html.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i)
+                      || html.match(/src="(https?:\/\/[^"'\s]+embed[^"'\s]*)"/i);
+
+        if (!videoMatch) {
           return [fallbackStream];
         }
 
         return [
           {
             name: 'FilmDozu',
-            title: '⌜ FILMDOZU ⌟ | ' + queryTitle + ' | Çoklu Kaynak',
-            url: match[1],
+            title: '⌜ FILMDOZU ⌟ | ' + info.title + ' | HD',
+            url: videoMatch[1],
             quality: '1080p',
             type: 'hls',
             headers: {
