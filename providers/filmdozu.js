@@ -175,6 +175,37 @@ async function resolveOk(embedUrl) {
   return null;
 }
 
+// vidmoly embed sayfasından master.m3u8 adresini çıkarır
+async function resolveVidmoly(embedUrl) {
+  var clean = embedUrl.split('?')[0];
+  var origin = (clean.match(/^https?:\/\/[^\/]+/) || ['https://vidmoly.net'])[0];
+  var html = await getText(clean, {
+    'User-Agent': ANDROID_UA,
+    'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+    'Referer': PRIMARY_DOMAIN + '/'
+  });
+  if (!html) return null;
+
+  // sources: [{ file: 'https://....m3u8?...' }]
+  var m = html.match(/file\s*:\s*['"]([^'"]+\.m3u8[^'"]*)['"]/) ||
+          html.match(/(https?:\/\/[^'"\s\\]+\.m3u8[^'"\s\\]*)/);
+  if (!m) return null;
+
+  var url = decodeHtml(m[1]).replace(/\\\//g, '/');
+  return { url: url, type: 'hls', quality: 'Auto', referer: origin + '/' };
+}
+
+// Adrese göre doğru çözücüyü seçer
+async function resolveSource(url) {
+  if (/ok\.ru/.test(url)) {
+    var r = await resolveOk(url);
+    if (r) r.referer = 'https://ok.ru/';
+    return r;
+  }
+  if (/vidmoly\./.test(url)) return resolveVidmoly(url);
+  return null;
+}
+
 async function getStreams(tmdbId, mediaType, season, episode) {
   try {
     // Site sadece film içeriyor
@@ -199,7 +230,9 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
     // 3) Sayfadaki kaynakları al, 4) hepsini aynı anda çöz
     var sources = extractSources(found.html);
-    var resolved = await Promise.all(sources.map(function (s) { return resolveOk(s.url); }));
+    var resolved = await Promise.all(sources.map(function (s) {
+      return resolveSource(s.url).catch(function () { return null; });
+    }));
     var streams = [];
     for (var i = 0; i < sources.length; i++) {
       var r = resolved[i];
@@ -210,7 +243,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         url: r.url,
         quality: r.quality,
         type: r.type,
-        headers: { 'User-Agent': ANDROID_UA, 'Referer': 'https://ok.ru/' }
+        headers: { 'User-Agent': ANDROID_UA, 'Referer': r.referer || 'https://ok.ru/' }
       });
     }
     return streams;
