@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Kararlı & Güvenli Dinamik Sürüm)
+//  FilmDozu — Nuvio Provider (Gerçek Dinamik Eşleme)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -14,49 +14,70 @@ var PAGE_HEADERS = {
 
 var TMDB_API_KEY = '500330721680edb6d5f7f12ba7cd9023';
 
-function fetchTmdbTitle(tmdbId, mediaType) {
+function norm(s) {
+  return (s || '').toLowerCase()
+    .replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ş/g,'s')
+    .replace(/ı/g,'i').replace(/İ/g,'i').replace(/ö/g,'o').replace(/ç/g,'c')
+    .replace(/â/g,'a').replace(/û/g,'u')
+    .replace(/[^a-z0-9]/g,'');
+}
+
+function fetchTmdbInfo(tmdbId, mediaType) {
   var ep = mediaType === 'tv' ? 'tv' : 'movie';
   return fetch('https://api.themoviedb.org/3/' + ep + '/' + tmdbId + '?api_key=' + TMDB_API_KEY + '&language=tr-TR')
     .then(function(r) { return r.json(); })
     .then(function(d) {
-      return d.title || d.name || d.original_title || d.original_name || '';
+      return {
+        titleTr: d.title || d.name || '',
+        titleEn: d.original_title || d.original_name || ''
+      };
     })
-    .catch(function() { return ''; });
+    .catch(function() { return { titleTr: '', titleEn: '' }; });
 }
 
 function getStreams(tmdbId, mediaType, season, episode) {
-  return fetchTmdbTitle(tmdbId, mediaType).then(function(title) {
-    console.log('[FilmDozu] Aranan Film/Dizi: ' + title);
+  return fetchTmdbInfo(tmdbId, mediaType).then(function(info) {
+    var query = info.titleTr || info.titleEn;
+    if (!query) return [];
 
-    // Güvenli akış (Arama aşamasında takılsa bile eklentinin her zaman görünmesini sağlar)
-    var defaultStream = {
-      name: 'FilmDozu',
-      title: '⌜ FILMDOZU ⌟ | HD | 1080p',
-      url: 'https://box-1097-y.vmbox.space/hls/xqx2o7ndpzokjiqbthkcpkqnuulsql4b3dgcr6d4z,y4ioiavo425vuaasaaa,q4ioiavo425elsjoxmq,.urlset/master.m3u8',
-      quality: '1080p',
-      type: 'hls',
-      headers: {
-        'User-Agent': ANDROID_UA,
-        'Referer': PRIMARY_DOMAIN + '/'
-      }
-    };
-
-    if (!title) {
-      return [defaultStream];
-    }
-
-    // Sitenin arama sayfasına istek atıyoruz
-    var searchUrl = PRIMARY_DOMAIN + '/?s=' + encodeURIComponent(title);
+    var searchUrl = PRIMARY_DOMAIN + '/?s=' + encodeURIComponent(query);
     return fetch(searchUrl, { headers: PAGE_HEADERS })
       .then(function(r) { return r.ok ? r.text() : ''; })
       .then(function(html) {
-        // Eğer sitede arama sonucu sayfasında film linki bulabilirsek buraya işleyebiliriz,
-        // bulamazsak Nuvio eklentiyi atlamasın diye güvenli akışı döndürüyoruz.
-        return [defaultStream];
+        // Sitedeki arama sonuçlarından ilk eşleşen film sayfasının linkini alıyoruz
+        var match = html.match(/<div[^>]+class="[^"]*item[^"]*"[\s\S]*?<a[^>]+href="([^"]+)"/i);
+        if (!match || !match[1]) return [];
+
+        var targetUrl = match[1];
+        if (mediaType === 'tv' && season && episode) {
+          targetUrl = targetUrl.replace(/\/$/, '') + '/sezon-' + season + '/bolum-' + episode + '/';
+        }
+
+        return fetch(targetUrl, { headers: PAGE_HEADERS })
+          .then(function(r) { return r.ok ? r.text() : ''; })
+          .then(function(pageHtml) {
+            // Film sayfasındaki gerçek m3u8 veya vmbox yayın adresini yakalıyoruz
+            var streamMatch = pageHtml.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i) 
+                           || pageHtml.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls\/[^"'\s]+)/i);
+
+            if (!streamMatch) return [];
+
+            return [
+              {
+                name: 'FilmDozu',
+                title: '⌜ FILMDOZU ⌟ | HD | 1080p',
+                url: streamMatch[1],
+                quality: '1080p',
+                type: 'hls',
+                headers: {
+                  'User-Agent': ANDROID_UA,
+                  'Referer': PRIMARY_DOMAIN + '/'
+                }
+              }
+            ];
+          });
       })
-      .catch(function() {
-        return [defaultStream];
-      });
+      .catch(function() { return []; });
   });
 }
 
