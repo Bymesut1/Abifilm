@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Genel Arama & Dinamik Dağıtım Sürümü)
+//  FilmDozu — Nuvio Provider (Saf & Sabitsiz Sürüm)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -14,6 +14,23 @@ var PAGE_HEADERS = {
 
 var TMDB_API_KEY = '500330721680edb6d5f7f12ba7cd9023';
 
+var trMap = {
+  'ç': 'c', 'Ç': 'c', 'ğ': 'g', 'Ğ': 'g', 'ş': 's', 'Ş': 's',
+  'ü': 'u', 'Ü': 'u', 'ı': 'i', 'İ': 'i', 'ö': 'o', 'Ö': 'o'
+};
+
+function slugify(text) {
+  if (!text) return '';
+  var str = text.toString();
+  for (var k in trMap) {
+    str = str.replace(new RegExp(k, 'g'), trMap[k]);
+  }
+  return str.toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
 function fetchTmdbInfo(tmdbId, mediaType) {
   var ep = mediaType === 'tv' ? 'tv' : 'movie';
   return fetch('https://api.themoviedb.org/3/' + ep + '/' + tmdbId + '?api_key=' + TMDB_API_KEY + '&language=tr-TR')
@@ -27,83 +44,55 @@ function fetchTmdbInfo(tmdbId, mediaType) {
 }
 
 function getStreams(tmdbId, mediaType, season, episode) {
-  var fallbackStream = {
-    name: 'FilmDozu',
-    title: '⌜ FILMDOZU ⌟ | Kaynak Bulunamadı',
-    url: 'https://box-1097-y.vmbox.space/hls/xqx2o7ndpzokjiqbthkcpkqnuulsql4b3dgcr6d4z,y4ioiavo425vuaasaaa,q4ioiavo425elsjoxmq,.urlset/master.m3u8',
-    quality: '1080p',
-    type: 'hls',
-    headers: {
-      'User-Agent': ANDROID_UA,
-      'Referer': PRIMARY_DOMAIN + '/'
-    }
-  };
-
   return fetchTmdbInfo(tmdbId, mediaType).then(function(info) {
     if (!info.title) {
-      return [fallbackStream];
+      return []; // Sabit hiçbir şey yok, film bulunamazsa boş döner
     }
 
-    // Doğrudan sabit slug yerine sitenin kendi arama parametresini kullanıyoruz ki doğru sayfaya gitsin
-    var searchUrl = PRIMARY_DOMAIN + '/?s=' + encodeURIComponent(info.title);
+    var cleanSlug = slugify(info.title);
+    var targetUrl = PRIMARY_DOMAIN + '/' + cleanSlug + '-izle/';
 
-    return fetch(searchUrl, { headers: PAGE_HEADERS })
+    if (mediaType === 'tv' && season && episode) {
+      targetUrl = PRIMARY_DOMAIN + '/' + slug + '-sezon-' + season + '-bolum-' + episode + '-izle/';
+    }
+
+    return fetch(targetUrl, { headers: PAGE_HEADERS })
       .then(function(r) {
         if (!r.ok) {
-          return [fallbackStream];
+          return [];
         }
         return r.text();
       })
-      .then(function(searchHtml) {
-        if (typeof searchHtml !== 'string' || !searchHtml) {
-          return [fallbackStream];
+      .then(function(html) {
+        if (typeof html !== 'string' || !html) {
+          return [];
         }
 
-        // Arama sonuç sayfasından ilk film detay bağlantısını dinamik olarak çekiyoruz
-        var linkMatch = searchHtml.match(/href="(https:\/\/filmdozu.com\/[^"'\s]+-izle\/)"/i)
-                     || searchHtml.match(/href="(https:\/\/filmdozu.com\/[^"'\s]+)"/i);
+        // Sayfa içerisinden gerçek video akış adresini yakala
+        var videoMatch = html.match(/(https?:\/\/[^"'\s]+\.okcdn\.ru[^"'\s]*)/i)
+                      || html.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i)
+                      || html.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i);
 
-        if (!linkMatch || !linkMatch[1]) {
-          return [fallbackStream];
+        if (!videoMatch) {
+          return [];
         }
 
-        var detailPageUrl = linkMatch[1];
-
-        // Şimdi bulduğumuz gerçek film detay sayfasına gidiyoruz
-        return fetch(detailPageUrl, { headers: PAGE_HEADERS })
-          .then(function(res) { return res.text(); })
-          .then(function(detailHtml) {
-            if (typeof detailHtml !== 'string' || !detailHtml) {
-              return [fallbackStream];
+        return [
+          {
+            name: 'FilmDozu',
+            title: '⌜ FILMDOZU ⌟ | ' + info.title,
+            url: videoMatch[1],
+            quality: '1080p',
+            type: 'hls',
+            headers: {
+              'User-Agent': ANDROID_UA,
+              'Referer': targetUrl
             }
-
-            // O sayfadaki gerçek video/oynatıcı kaynağını yakalıyoruz
-            var videoMatch = detailHtml.match(/(https?:\/\/[^"'\s]+\.okcdn\.ru[^"'\s]*)/i)
-                          || detailHtml.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i)
-                          || detailHtml.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i)
-                          || detailHtml.match(/src="(https?:\/\/[^"'\s]+embed[^"'\s]*)"/i);
-
-            if (!videoMatch) {
-              return [fallbackStream];
-            }
-
-            return [
-              {
-                name: 'FilmDozu',
-                title: '⌜ FILMDOZU ⌟ | ' + info.title,
-                url: videoMatch[1],
-                quality: '1080p',
-                type: 'hls',
-                headers: {
-                  'User-Agent': ANDROID_UA,
-                  'Referer': detailPageUrl
-                }
-              }
-            ];
-          });
+          }
+        ];
       })
       .catch(function() {
-        return [fallbackStream];
+        return [];
       });
   });
 }
