@@ -10,7 +10,6 @@
       "id": "abifilm",
       "name": "Abi Film",
       "description": "FilmDozu arşivi üzerinden HLS ve Okru akışları.",
-      "logo": "https://www.google.com/s2/favicons?domain=filmdozu.com&sz=64",
       "version": "1.0.0",
       "filename": "providers/filmdozu.js",
       "supportedTypes": [
