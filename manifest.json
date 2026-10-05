@@ -6,11 +6,11 @@
   "author": "Bymesut1",
   "scrapers": [
     {
-      "id": "hdfilmcehennemi",
-      "name": "HDFilmCehennemi",
-      "logo": "https://www.google.com/s2/favicons?domain=hdfilmcehennemi.com&sz=%size%",
+      "id": "filmdozu",
+      "name": "FilmDozu",
+      "logo": "https://www.google.com/s2/favicons?domain=filmdozu.com&sz=%size%",
       "version": "0.1.0",
-      "filename": "providers/hdfilmcehennemi.js",
+      "filename": "providers/filmdozu.js",
       "supportedTypes": [
         "movie",
         "tv"
