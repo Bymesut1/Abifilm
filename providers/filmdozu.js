@@ -2,45 +2,45 @@ import {
     TvType,
     BaseProvider,
     loadHtml,
-    sourcer,
-} from '@nativeseeker/plugin-sdk'; // Nuvio/Cloudstream SDK yapısına göre
+} from '@nativeseeker/plugin-sdk';
 
-export default class VmBoxProvider extends BaseProvider {
-    name = 'FilmDozu / VmBox';
-    logo = 'https://i.hizliresim.com/ornek.png';
+export default class FilmDozuProvider extends BaseProvider {
+    name = 'FilmDozu';
+    logo = 'https://www.google.com/s2/favicons?domain=filmdozu.com&sz=64';
     supportedTypes = [TvType.Movie, TvType.TvSeries];
     mainUrl = 'https://filmdozu.com';
 
     async search(query) {
-        // Arama mantığı veya film sayfasına yönlendirme
-        const res = await this.client.get(`${this.mainUrl}/arama?q=${encodeURIComponent(query)}`);
+        const res = await this.client.get(`${this.mainUrl}/?s=${encodeURIComponent(query)}`);
         const $ = loadHtml(res.data);
         const results = [];
 
-        $('.film-item').each((i, el) => {
-            results.push({
-                title: $(el).find('.title').text().trim(),
-                url: $(el).find('a').attr('href'),
-                posterUrl: $(el).find('img').attr('data-src'),
-                type: TvType.Movie
-            });
+        // Site yapısına göre arama sonuçlarını çekme
+        $('.movies-list .item, .search-page-result .item').each((i, el) => {
+            const title = $(el).find('.title, h3').text().trim();
+            const url = $(el).find('a').attr('href');
+            const posterUrl = $(el).find('img').attr('data-src') \vert{}\vert{}$(el).find('img').attr('src');
+
+            if (url) {
+                results.push({
+                    title: title,
+                    url: url,
+                    posterUrl: posterUrl,
+                    type: TvType.Movie
+                });
+            }
         });
 
         return results;
     }
 
     async getUrl(url) {
-        // Film detay sayfasından iframe veya kaynak kodunu çekme
-        const res = await this.client.get(url);
-        const html = res.data;
-        
-        // Vbox veya hedef m3u8 adresini regex ile yakalama veya döndürme
-        // Yakaladığın direkt m3u8 bağlantısını buraya entegre edebiliriz:
-        const streamUrl = "https://box-1097-y.vmbox.space/hls/xqx2o7ndpzokjiqbthkcpkqnuulsql4b3dgcr6d4zy4ioiavo425tvyasaaa/index-v1-a1.m3u8";
+        // Detay sayfasından veya doğrudan yakalanan akış adresinden dönecek kaynaklar
+        const streamUrl = "https://box-1097-y.vmbox.space/hls/xqx2o7ndpzokjiqbthkcpkqnuulsql4b3dgcr6d4z,y4ioiavo425vuaasaaa,q4ioiavo425elsjoxmq,.urlset/master.m3u8";
 
         return [
             {
-                name: 'VmBox HD',
+                name: 'FilmDozu - VmBox HD',
                 url: streamUrl,
                 quality: '1080p',
                 isM3u8: true,
