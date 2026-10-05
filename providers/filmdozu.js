@@ -13,6 +13,14 @@ var PAGE_HEADERS = {
   'Referer': PRIMARY_DOMAIN + '/'
 };
 
+function withTimeout(promise, ms) {
+  return new Promise(function (resolve, reject) {
+    var t = setTimeout(function () { reject(new Error('timeout')); }, ms);
+    promise.then(function (v) { clearTimeout(t); resolve(v); },
+                 function (e) { clearTimeout(t); reject(e); });
+  });
+}
+
 function decodeHtml(s) {
   return String(s || '').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'")
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
@@ -31,9 +39,9 @@ function slugify(s) {
 
 async function getText(url, headers) {
   try {
-    var res = await fetch(url, { headers: headers || PAGE_HEADERS });
+    var res = await withTimeout(fetch(url, { headers: headers || PAGE_HEADERS }), 8000);
     if (!res.ok) return '';
-    return await res.text();
+    return await withTimeout(res.text(), 8000);
   } catch (e) {
     return '';
   }
@@ -57,24 +65,28 @@ async function findMoviePage(title, origTitle, year) {
   var paths = [];
   function add(p) { if (p && paths.indexOf(p) === -1) paths.push(p); }
 
-  // 1) Doğrudan tahmin: /film/turkce-baslik
+  // 1) Doğrudan tahmin: /film/baslik
   add('/film/' + slugify(title));
   add('/film/' + slugify(origTitle));
 
-  // 2) Site içi arama: /ara?q=...
-  var queries = [origTitle, title];
-  for (var q = 0; q < queries.length; q++) {
-    if (!queries[q]) continue;
-    var html = await getText(PRIMARY_DOMAIN + '/ara?q=' + encodeURIComponent(queries[q]));
+  // 2) Site içi arama: /ara?q=... (aynı anda)
+  var queries = [origTitle, title].filter(Boolean);
+  var results = await Promise.all(queries.map(function (q) {
+    return getText(PRIMARY_DOMAIN + '/ara?q=' + encodeURIComponent(q));
+  }));
+  results.forEach(function (html) {
     var re = /href="(\/film\/[a-z0-9-]+)"/g, m;
     while ((m = re.exec(html)) !== null) add(m[1]);
-  }
+  });
 
-  // Adayları sırayla aç, yıl + başlık tutanı seç
-  for (var i = 0; i < paths.length && i < 8; i++) {
-    var page = await getText(PRIMARY_DOMAIN + paths[i]);
-    if (page && isRightMovie(page, title, origTitle, year)) {
-      return { url: PRIMARY_DOMAIN + paths[i], html: page };
+  // 3) Adayları aynı anda aç, yıl + başlık tutanı seç
+  var candidates = paths.slice(0, 6);
+  var pages = await Promise.all(candidates.map(function (p) {
+    return getText(PRIMARY_DOMAIN + p);
+  }));
+  for (var i = 0; i < pages.length; i++) {
+    if (pages[i] && isRightMovie(pages[i], title, origTitle, year)) {
+      return { url: PRIMARY_DOMAIN + candidates[i], html: pages[i] };
     }
   }
   return null;
@@ -136,9 +148,10 @@ async function getStreams(tmdbId, mediaType, season, episode) {
     if (mediaType !== 'movie') return [];
 
     // 1) TMDB'den başlık ve yıl
-    var info = await (await fetch(
+    var tmdbRes = await withTimeout(fetch(
       'https://api.themoviedb.org/3/movie/' + tmdbId + '?language=tr-TR&api_key=' + TMDB_KEY
-    )).json();
+    ), 8000);
+    var info = await tmdbRes.json();
     var title = info.title;
     var origTitle = info.original_title;
     var year = (info.release_date || '').slice(0, 4);
@@ -151,11 +164,12 @@ async function getStreams(tmdbId, mediaType, season, episode) {
       return [];
     }
 
-    // 3) Sayfadaki kaynakları al, 4) her birini çöz
+    // 3) Sayfadaki kaynakları al, 4) hepsini aynı anda çöz
     var sources = extractSources(found.html);
+    var resolved = await Promise.all(sources.map(function (s) { return resolveOk(s.url); }));
     var streams = [];
     for (var i = 0; i < sources.length; i++) {
-      var r = await resolveOk(sources[i].url);
+      var r = resolved[i];
       if (!r) continue;
       streams.push({
         name: 'FilmDozu',
