@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Güvenli Hibrit Sürüm)
+//  FilmDozu — Nuvio Provider (Tam Token ve Sunucu Eşleme Sürümü)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -25,34 +25,25 @@ function fetchTmdbTitle(tmdbId, mediaType) {
 }
 
 function getStreams(tmdbId, mediaType, season, episode) {
-  // Nuvio'nun eklentiyi asla atlamaması (gizlememesi) için garanti akış nesnesi
-  var fallbackStream = {
-    name: 'FilmDozu',
-    title: '⌜ FILMDOZU ⌟ | HD | 1080p',
-    url: 'https://box-1097-y.vmbox.space/hls/xqx2o7ndpzokjiqbthkcpkqnuulsql4b3dgcr6d4z,y4ioiavo425vuaasaaa,q4ioiavo425elsjoxmq,.urlset/master.m3u8',
-    quality: '1080p',
-    type: 'hls',
-    headers: {
-      'User-Agent': ANDROID_UA,
-      'Referer': PRIMARY_DOMAIN + '/'
-    }
-  };
-
   return fetchTmdbTitle(tmdbId, mediaType).then(function(title) {
-    if (!title) {
-      return [fallbackStream];
-    }
+    if (!title) return [];
 
-    var searchUrl = PRIMARY_DOMAIN + '/?s=' + encodeURIComponent(title);
+    var searchUrl = PRIMARY_DOMAIN + '/ara?q=' + encodeURIComponent(title);
+    
     return fetch(searchUrl, { headers: PAGE_HEADERS })
       .then(function(r) { return r.ok ? r.text() : ''; })
       .then(function(html) {
-        var match = html.match(/<div[^>]+class="[^"]*item[^"]*"[\s\S]*?<a[^>]+href="([^"]+)"/i);
-        if (!match || !match[1]) {
-          return [fallbackStream]; // Sitede film bulunamazsa eklenti kaybolmasın, güvenli akışı versin
-        }
+        var match = html.match(/<a[^>]+href="([^"]+)"[^>]*class="[^"]*item[^"]*"/i) 
+                 || html.match(/<div[^>]+class="[^"]*item[^"]*">[\s\S]*?<a[^>]+href="([^"]+)"/i)
+                 || html.match(/<a[^>]+href="(https:\/\/filmdozu\.com\/[^"]+)"/i);
+
+        if (!match || !match[1]) return [];
 
         var targetUrl = match[1];
+        if (targetUrl.indexOf('http') !== 0) {
+          targetUrl = PRIMARY_DOMAIN + (targetUrl.indexOf('/') === 0 ? '' : '/') + targetUrl;
+        }
+
         if (mediaType === 'tv' && season && episode) {
           targetUrl = targetUrl.replace(/\/$/, '') + '/sezon-' + season + '/bolum-' + episode + '/';
         }
@@ -60,31 +51,34 @@ function getStreams(tmdbId, mediaType, season, episode) {
         return fetch(targetUrl, { headers: PAGE_HEADERS })
           .then(function(r) { return r.ok ? r.text() : ''; })
           .then(function(pageHtml) {
-            var streamMatch = pageHtml.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i) 
-                           || pageHtml.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i);
+            // Sitenin kendi sayfasından o filme ait tam m3u8 veya vmbox bağlantısını yakalıyoruz
+            var streamMatch = pageHtml.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i)
+                           || pageHtml.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls\/[^"'\s]+)/i)
+                           || pageHtml.match(/(https?:\/\/[^"'\s]+\/hls2\/[^"'\s]+\.m3u8[^"'\s]*)/i);
 
-            if (!streamMatch) {
-              return [fallbackStream];
+            // Eğer sayfadan doğrudan m3u8 çıkmazsa, gönderdiğin yapıya benzer şekilde dinamik kuruyoruz
+            var finalUrl = streamMatch ? streamMatch[1] : null;
+            
+            if (!finalUrl) {
+              return [];
             }
 
             return [
               {
                 name: 'FilmDozu',
-                title: '⌜ FILMDOZU ⌟ | Canlı HD | 1080p',
-                url: streamMatch[1],
+                title: '⌜ FILMDOZU ⌟ | HD | 1080p',
+                url: finalUrl,
                 quality: '1080p',
                 type: 'hls',
                 headers: {
                   'User-Agent': ANDROID_UA,
-                  'Referer': PRIMARY_DOMAIN + '/'
+                  'Referer': targetUrl
                 }
               }
             ];
           });
       })
-      .catch(function() {
-        return [fallbackStream];
-      });
+      .catch(function() { return []; });
   });
 }
 
