@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Kararlı & İşlevsel Yenileme Sürümü)
+//  FilmDozu — Nuvio Provider (Stabil Kaynak & Hata Çözücü Sürüm)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -56,39 +56,29 @@ function getStreams(tmdbId, mediaType, season, episode) {
       targetUrl = PRIMARY_DOMAIN + '/' + cleanSlug + '-sezon-' + season + '-bolum-' + episode + '-izle/';
     }
 
-    // Yenile tuşuna basıldığında işlevsiz kalmaması ve Nuvio'nun hata döngüsüne girmemesi için
-    // geçerli bir HLS akış formatında çalışan, eklentinin listede görünmesini sağlayan güvenli durum akışı.
-    var activePlaceholder = {
-      name: 'FilmDozu',
-      title: '⌜ FILMDOZU ⌟ | ' + info.title + ' (Yeniden Denemek İçin Tıklayın)',
-      url: targetUrl, // Tıklandığında veya yenilendiğinde tetiklenecek hedef
-      quality: '1080p',
-      type: 'hls',
-      headers: {
-        'User-Agent': ANDROID_UA,
-        'Referer': PRIMARY_DOMAIN + '/'
-      }
-    };
-
     return fetch(targetUrl, { headers: PAGE_HEADERS })
       .then(function(r) {
         if (!r.ok) {
-          return [activePlaceholder];
+          return [];
         }
         return r.text();
       })
       .then(function(html) {
         if (typeof html !== 'string' || !html) {
-          return [activePlaceholder];
+          return [];
         }
 
-        // Sayfa içerisinden gerçek video akış adresini yakala
+        // Sayfa içerisinden video akış adresini yakalamaya çalışıyoruz
         var videoMatch = html.match(/(https?:\/\/[^"'\s]+\.okcdn\.ru[^"'\s]*)/i)
                       || html.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i)
-                      || html.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i);
+                      || html.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i)
+                      || html.match(/src="(https?:\/\/[^"'\s]+embed[^"'\s]*)"/i);
 
+        // Eğer doğrudan bir video/m3u8 linki regex ile yakalanamazsa,
+        // Nuvio'nun "source hata" vermemesi ve eklentinin isminin düzgün görünmesi için
+        // akış listesini boş döndürüyoruz veya geçerli bir format sunuyoruz.
         if (!videoMatch) {
-          return [activePlaceholder];
+          return [];
         }
 
         return [
@@ -106,7 +96,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
         ];
       })
       .catch(function() {
-        return [activePlaceholder];
+        return [];
       });
   });
 }
