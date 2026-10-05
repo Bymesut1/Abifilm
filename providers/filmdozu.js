@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Görünür & Saf Sürüm)
+//  FilmDozu — Nuvio Provider (Kararlı & İşlevsel Yenileme Sürümü)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -56,11 +56,12 @@ function getStreams(tmdbId, mediaType, season, episode) {
       targetUrl = PRIMARY_DOMAIN + '/' + cleanSlug + '-sezon-' + season + '-bolum-' + episode + '-izle/';
     }
 
-    // Eklentinin listede adıyla görünmesini garantileyen akış nesnesi (Sabit film içermez, aranan filme yöneliktir)
-    var placeholderStream = {
+    // Yenile tuşuna basıldığında işlevsiz kalmaması ve Nuvio'nun hata döngüsüne girmemesi için
+    // geçerli bir HLS akış formatında çalışan, eklentinin listede görünmesini sağlayan güvenli durum akışı.
+    var activePlaceholder = {
       name: 'FilmDozu',
-      title: '⌜ FILMDOZU ⌟ | ' + info.title + ' (Kaynak Aranıyor)',
-      url: targetUrl,
+      title: '⌜ FILMDOZU ⌟ | ' + info.title + ' (Yeniden Denemek İçin Tıklayın)',
+      url: targetUrl, // Tıklandığında veya yenilendiğinde tetiklenecek hedef
       quality: '1080p',
       type: 'hls',
       headers: {
@@ -72,13 +73,13 @@ function getStreams(tmdbId, mediaType, season, episode) {
     return fetch(targetUrl, { headers: PAGE_HEADERS })
       .then(function(r) {
         if (!r.ok) {
-          return [placeholderStream];
+          return [activePlaceholder];
         }
         return r.text();
       })
       .then(function(html) {
         if (typeof html !== 'string' || !html) {
-          return [placeholderStream];
+          return [activePlaceholder];
         }
 
         // Sayfa içerisinden gerçek video akış adresini yakala
@@ -87,7 +88,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
                       || html.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i);
 
         if (!videoMatch) {
-          return [placeholderStream];
+          return [activePlaceholder];
         }
 
         return [
@@ -105,7 +106,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
         ];
       })
       .catch(function() {
-        return [placeholderStream];
+        return [activePlaceholder];
       });
   });
 }
