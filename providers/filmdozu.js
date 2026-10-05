@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Kesin Çözüm & Dinamik Arama Sürümü)
+//  FilmDozu — Nuvio Provider (Saf & Kesin Çözüm Sürümü)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -14,14 +14,6 @@ var PAGE_HEADERS = {
 
 var TMDB_API_KEY = '500330721680edb6d5f7f12ba7cd9023';
 
-function norm(s) {
-  return (s || '').toLowerCase()
-    .replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ş/g,'s')
-    .replace(/ı/g,'i').replace(/İ/g,'i').replace(/ö/g,'o').replace(/ç/g,'c')
-    .replace(/â/g,'a').replace(/û/g,'u')
-    .replace(/[^a-z0-9]/g,'');
-}
-
 function fetchTmdbInfo(tmdbId, mediaType) {
   var ep = mediaType === 'tv' ? 'tv' : 'movie';
   return fetch('https://api.themoviedb.org/3/' + ep + '/' + tmdbId + '?api_key=' + TMDB_API_KEY + '&language=tr-TR')
@@ -29,33 +21,19 @@ function fetchTmdbInfo(tmdbId, mediaType) {
     .then(function(d) {
       return {
         titleTr: d.title || d.name || '',
-        titleEn: d.original_title || d.original_name || '',
-        year:    (d.release_date || d.first_air_date || '').substring(0, 4)
+        titleEn: d.original_title || d.original_name || ''
       };
     })
-    .catch(function() { return { titleTr: '', titleEn: '', year: '' }; });
+    .catch(function() { return { titleTr: '', titleEn: '' }; });
 }
 
 function getStreams(tmdbId, mediaType, season, episode) {
-  var fallbackStream = {
-    name: 'FilmDozu',
-    title: '⌜ FILMDOZU ⌟ | HD | 1080p',
-    url: 'https://box-1097-y.vmbox.space/hls/xqx2o7ndpzokjiqbthkcpkqnuulsql4b3dgcr6d4z,y4ioiavo425vuaasaaa,q4ioiavo425elsjoxmq,.urlset/master.m3u8',
-    quality: '1080p',
-    type: 'hls',
-    headers: {
-      'User-Agent': ANDROID_UA,
-      'Referer': PRIMARY_DOMAIN + '/'
-    }
-  };
-
   return fetchTmdbInfo(tmdbId, mediaType).then(function(mediaInfo) {
     var queryTitle = mediaInfo.titleTr || mediaInfo.titleEn;
     if (!queryTitle) {
-      return [fallbackStream];
+      throw new Error('TMDB film adı alınamadı');
     }
 
-    // Sitenin arama sayfasına istek atıyoruz
     var searchUrl = PRIMARY_DOMAIN + '/ara?q=' + encodeURIComponent(queryTitle);
     
     return fetch(searchUrl, { headers: PAGE_HEADERS })
@@ -65,7 +43,6 @@ function getStreams(tmdbId, mediaType, season, episode) {
       })
       .then(function(r) { return r.ok ? r.text() : ''; })
       .then(function(html) {
-        // Arama sonuçlarındaki tüm film bağlantılarını ve başlıklarını topluyoruz
         var links = [];
         var linkRe = /href="(https:\/\/filmdozu\.com\/[^"]+\-izle\/)"/gi;
         var match;
@@ -75,7 +52,6 @@ function getStreams(tmdbId, mediaType, season, episode) {
           }
         }
 
-        // Eğer klasik ara sayfası sonuç vermezse alternatif regex dene
         if (!links.length) {
           var altRe = /href="([^"]+\-izle\/)"/gi;
           while ((match = altRe.exec(html)) !== null) {
@@ -86,15 +62,12 @@ function getStreams(tmdbId, mediaType, season, episode) {
           }
         }
 
-        // Sonuç bulunamadıysa güvenli akışa dön
         if (!links.length) {
-          return [fallbackStream];
+          throw new Error('Sitede bu filme ait arama sonucu bulunamadı');
         }
 
-        // Aradığımız filme en uygun olan linki seçiyoruz (ilk sonuç veya başlık eşleşmesi)
         var targetUrl = links[0];
         
-        // Eğer dizi ise sezon ve bölüm ekle
         if (mediaType === 'tv' && season && episode) {
           targetUrl = targetUrl.replace(/\/$/, '') + '/sezon-' + season + '/bolum-' + episode + '/';
         }
@@ -106,7 +79,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
                            || pageHtml.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i);
 
             if (!streamMatch) {
-              return [fallbackStream];
+              throw new Error('Film sayfasında m3u8 video bağlantısı bulunamadı');
             }
 
             return [
@@ -123,9 +96,6 @@ function getStreams(tmdbId, mediaType, season, episode) {
               }
             ];
           });
-      })
-      .catch(function() {
-        return [fallbackStream];
       });
   });
 }
