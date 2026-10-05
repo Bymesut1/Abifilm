@@ -1,15 +1,23 @@
 {
-  "name": "Abi Film",
-  "description": "Abi Film Deposu",
+  "id": "abifilm.nuvio.plugins",
+  "name": "Abi Film Plugin",
+  "logo": "https://raw.githubusercontent.com/Bymesut1/Abifilm/refs/heads/main/images/icon.png",
   "version": "1.0.0",
-  "addons": [
+  "author": "Bymesut",
+  "scrapers": [
     {
       "id": "filmdozu",
       "name": "Abi Film",
+      "logo": "https://www.google.com/s2/favicons?domain=filmdozu.com&sz=%size%",
       "version": "1.0.0",
-      "description": "FilmDozu ve Vmbox akış sağlayıcısı",
-      "types": ["movie", "tv"],
-      "filename": "providers/filmdozu.js"
+      "filename": "providers/filmdozu.js",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "contentLanguage": [
+        "tr"
+      ]
     }
   ]
 }
