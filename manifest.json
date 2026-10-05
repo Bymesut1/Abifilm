@@ -2,7 +2,7 @@
   "id": "abifilm.nuvio.plugins",
   "name": "Abi Film Plugin",
   "logo": "https://raw.githubusercontent.com/Bymesut1/Abifilm/refs/heads/main/images/icon.png",
-  "version": "1.0.4",
+  "version": "1.0.1",
   "author": "Bymesut",
   "scrapers": [
     {
@@ -13,20 +13,6 @@
       "filename": "providers/filmdozu.js",
       "supportedTypes": [
         "movie"
-      ],
-      "contentLanguage": [
-        "tr"
-      ]
-    },
-    {
-      "id": "dizipal",
-      "name": "Abi Dizipal",
-      "logo": "https://www.google.com/s2/favicons?domain=dizipal2135.com&sz=%size%",
-      "version": "1.0.2",
-      "filename": "providers/dizipal.js",
-      "supportedTypes": [
-        "movie",
-        "tv"
       ],
       "contentLanguage": [
         "tr"
