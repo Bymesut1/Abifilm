@@ -1,15 +1,17 @@
 {
   "id": "app.bymesut1.abifilm",
   "name": "Abi Film",
-  "logo": "https://raw.githubusercontent.com/Bymesut1/Yeni-film/main/images/icon.png",
-  "version": "0.1.0",
+  "logo": "https://raw.githubusercontent.com/Bymesut1/Abi-film/main/images/icon.png",
+  "version": "1.0.0",
   "author": "Bymesut1",
+  "description": "Abi Film — Türkçe Film ve Dizi Kaynakları",
   "scrapers": [
     {
       "id": "abifilm",
       "name": "Abi Film",
+      "description": "FilmDozu arşivi üzerinden HLS ve Okru akışları.",
       "logo": "https://www.google.com/s2/favicons?domain=filmdozu.com&sz=64",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "filename": "providers/filmdozu.js",
       "supportedTypes": [
         "movie",
