@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Buffering & Kaynak Hatası Giderici Sürüm)
+//  Abi Film — Nuvio Provider (En Üst Sıra & Kararlı Sürüm)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -77,15 +77,12 @@ function getStreams(tmdbId, mediaType, season, episode) {
         }
 
         var streamUrl = videoMatch[1];
-        
-        // Okru veya harici CDN linklerinin buffering yapmasını engellemek için
-        // oynatıcının istek yaparken kullanacağı referer ve headers yapılandırmasını optimize ediyoruz.
         var refererTarget = streamUrl.indexOf('okcdn.ru') !== -1 ? 'https://ok.ru/' : targetUrl;
 
         return [
           {
-            name: 'FilmDozu',
-            title: '⌜ FILMDOZU ⌟ | ' + info.title + ' | 1080p',
+            name: 'Abi Film', // Listede en üst sıralara yerleşmesi için A harfiyle başlayan isim
+            title: 'Abi Film | ' + info.title + ' | 1080p',
             url: streamUrl,
             quality: '1080p',
             type: 'hls',
