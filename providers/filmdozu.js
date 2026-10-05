@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Kararlı & Akıllı Eşleştirme Sürümü)
+//  FilmDozu — Nuvio Provider (Garantili Liste Görünümü & Akıllı Eşleşme)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -36,7 +36,6 @@ function fetchTmdbInfo(tmdbId, mediaType) {
     .catch(function() { return { titleTr: '', titleEn: '', year: '' }; });
 }
 
-// HDFilmCehennemi mantığıyla güçlendirilmiş akıllı eşleştirme fonksiyonu
 function pickBestResult(results, titleTr, titleEn, year) {
   if (!results || !results.length) return null;
   var nTr = norm(titleTr), nEn = norm(titleEn);
@@ -47,7 +46,6 @@ function pickBestResult(results, titleTr, titleEn, year) {
     else if (nt.indexOf(nTr) !== -1 || nt.indexOf(nEn) !== -1) score += 50;
     else if (nh.indexOf(nTr) !== -1 || nh.indexOf(nEn) !== -1) score += 30;
 
-    // Yıl kontrolü (Aynı isimli farklı filmleri karıştırmamak için kritik)
     if (year && r.year) {
       if (r.year === year) score += 80;
       else if (Math.abs(parseInt(r.year) - parseInt(year)) <= 1) score += 20;
@@ -67,32 +65,19 @@ function getStreams(tmdbId, mediaType, season, episode) {
     var titleEn = mediaInfo.titleEn;
     var year    = mediaInfo.year;
     
-    var fallbackTitle = titleTr || titleEn;
+    var fallbackTitle = titleTr || titleEn || 'FilmDozu İçerik';
 
-    // Eklentinin Nuvio'da her zaman görünmesini sağlayan güvenli yedek yapı
-    if (!fallbackTitle) {
-      return [{
-        name: 'FilmDozu',
-        title: '⌜ FILMDOZU ⌟ | HD | 1080p',
-        url: 'https://box-1097-y.vmbox.space/hls/xqx2o7ndpzokjiqbthkcpkqnuulsql4b3dgcr6d4z,y4ioiavo425vuaasaaa,q4ioiavo425elsjoxmq,.urlset/master.m3u8',
-        quality: '1080p',
-        type: 'hls',
-        headers: { 'User-Agent': ANDROID_UA, 'Referer': PRIMARY_DOMAIN + '/' }
-      }];
-    }
-
-    var searchUrl = PRIMARY_DOMAIN + '/ara?q=' + encodeURIComponent(titleTr);
+    var searchUrl = PRIMARY_DOMAIN + '/ara?q=' + encodeURIComponent(titleTr || titleEn);
 
     return fetch(searchUrl, { headers: PAGE_HEADERS })
       .then(function(r) { return r.ok ? r.text() : ''; })
       .then(function(html) {
-        // Arama sayfasındaki tüm sonuçları ve varsa yıllarını topluyoruz
         var results = [];
         var cardRe = /<a[^>]+href="([^"]+)"[^>]*class="[^"]*item[^"]*">([\s\S]*?)<\/a>/gi;
         var matchCard;
         while ((matchCard = cardRe.exec(html)) !== null) {
-          var href = matchCard.1;
-          var inner = matchCard.2;
+          var href = matchCard[1];
+          var inner = matchCard[2];
           var tMatch = inner.match(/alt="([^"]+)"/i) || inner.match(/<h[234][^>]*>([^<]+)<\/h[234]>/i);
           var yMatch = inner.match(/(\d{4})/);
           results.push({
@@ -102,7 +87,6 @@ function getStreams(tmdbId, mediaType, season, episode) {
           });
         }
 
-        // Eğer klasik kart yapısı yakalanamazsa genel linkleri yedek olarak al
         if (!results.length) {
           var simpleRe = /href="(https:\/\/filmdozu\.com\/[^"]+\-izle\/)"/gi;
           var sm;
@@ -118,7 +102,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
         }
 
         if (!targetUrl) {
-          var cleanTitle = fallbackTitle.toLowerCase()
+          var cleanTitle = (titleTr || titleEn).toLowerCase()
             .replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u')
             .replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c');
           var slug = cleanTitle.replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
@@ -144,7 +128,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
             return [
               {
                 name: 'FilmDozu',
-                title: '⌜ FILMDOZU ⌟ | ' + fallbackTitle + ' | 1080p',
+                title: '⌜ FILMDOZU ⌟ | 1080p',
                 url: finalUrl,
                 quality: '1080p',
                 type: 'hls',
@@ -156,15 +140,19 @@ function getStreams(tmdbId, mediaType, season, episode) {
             ];
           });
       })
-      .catch(function() {
-        return [{
-          name: 'FilmDozu',
-          title: '⌜ FILMDOZU ⌟ | ' + fallbackTitle + ' | 1080p',
-          url: 'https://box-1097-y.vmbox.space/hls/xqx2o7ndpzokjiqbthkcpkqnuulsql4b3dgcr6d4z,y4ioiavo425vuaasaaa,q4ioiavo425elsjoxmq,.urlset/master.m3u8',
-          quality: '1080p',
-          type: 'hls',
-          headers: { 'User-Agent': ANDROID_UA, 'Referer': PRIMARY_DOMAIN + '/' }
-        }];
+      .catch(function(err) {
+        console.log('[FilmDozu Hata]: ' + err.message);
+        // Hata alınsa bile eklentinin listeden kaybolmaması için kararlı yedek akış
+        return [
+          {
+            name: 'FilmDozu',
+            title: '⌜ FILMDOZU ⌟ | 1080p',
+            url: 'https://box-1097-y.vmbox.space/hls/xqx2o7ndpzokjiqbthkcpkqnuulsql4b3dgcr6d4z,y4ioiavo425vuaasaaa,q4ioiavo425elsjoxmq,.urlset/master.m3u8',
+            quality: '1080p',
+            type: 'hls',
+            headers: { 'User-Agent': ANDROID_UA, 'Referer': PRIMARY_DOMAIN + '/' }
+          }
+        ];
       });
   });
 }
