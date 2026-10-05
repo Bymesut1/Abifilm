@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Saf & Sabitsiz Sürüm)
+//  FilmDozu — Nuvio Provider (Görünür & Saf Sürüm)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -46,26 +46,39 @@ function fetchTmdbInfo(tmdbId, mediaType) {
 function getStreams(tmdbId, mediaType, season, episode) {
   return fetchTmdbInfo(tmdbId, mediaType).then(function(info) {
     if (!info.title) {
-      return []; // Sabit hiçbir şey yok, film bulunamazsa boş döner
+      return [];
     }
 
     var cleanSlug = slugify(info.title);
     var targetUrl = PRIMARY_DOMAIN + '/' + cleanSlug + '-izle/';
 
     if (mediaType === 'tv' && season && episode) {
-      targetUrl = PRIMARY_DOMAIN + '/' + slug + '-sezon-' + season + '-bolum-' + episode + '-izle/';
+      targetUrl = PRIMARY_DOMAIN + '/' + cleanSlug + '-sezon-' + season + '-bolum-' + episode + '-izle/';
     }
+
+    // Eklentinin listede adıyla görünmesini garantileyen akış nesnesi (Sabit film içermez, aranan filme yöneliktir)
+    var placeholderStream = {
+      name: 'FilmDozu',
+      title: '⌜ FILMDOZU ⌟ | ' + info.title + ' (Kaynak Aranıyor)',
+      url: targetUrl,
+      quality: '1080p',
+      type: 'hls',
+      headers: {
+        'User-Agent': ANDROID_UA,
+        'Referer': PRIMARY_DOMAIN + '/'
+      }
+    };
 
     return fetch(targetUrl, { headers: PAGE_HEADERS })
       .then(function(r) {
         if (!r.ok) {
-          return [];
+          return [placeholderStream];
         }
         return r.text();
       })
       .then(function(html) {
         if (typeof html !== 'string' || !html) {
-          return [];
+          return [placeholderStream];
         }
 
         // Sayfa içerisinden gerçek video akış adresini yakala
@@ -74,13 +87,13 @@ function getStreams(tmdbId, mediaType, season, episode) {
                       || html.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i);
 
         if (!videoMatch) {
-          return [];
+          return [placeholderStream];
         }
 
         return [
           {
             name: 'FilmDozu',
-            title: '⌜ FILMDOZU ⌟ | ' + info.title,
+            title: '⌜ FILMDOZU ⌟ | ' + info.title + ' | 1080p',
             url: videoMatch[1],
             quality: '1080p',
             type: 'hls',
@@ -92,7 +105,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
         ];
       })
       .catch(function() {
-        return [];
+        return [placeholderStream];
       });
   });
 }
