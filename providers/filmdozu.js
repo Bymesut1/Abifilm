@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Çoklu Kaynak & Dinamik Eşleşme Sürümü)
+//  FilmDozu — Nuvio Provider (Tüm Kaynakları Çeken Kapsamlı Sürüm)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -14,34 +14,40 @@ var PAGE_HEADERS = {
 
 var TMDB_API_KEY = '500330721680edb6d5f7f12ba7cd9023';
 
-function fetchTmdbTitle(tmdbId, mediaType) {
+var trMap = {
+  'ç': 'c', 'Ç': 'c', 'ğ': 'g', 'Ğ': 'g', 'ş': 's', 'Ş': 's',
+  'ü': 'u', 'Ü': 'u', 'ı': 'i', 'İ': 'i', 'ö': 'o', 'Ö': 'o'
+};
+
+function slugify(text) {
+  if (!text) return '';
+  var str = text.toString();
+  for (var k in trMap) {
+    str = str.replace(new RegExp(k, 'g'), trMap[k]);
+  }
+  return str.toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
+function fetchTmdbInfo(tmdbId, mediaType) {
   var ep = mediaType === 'tv' ? 'tv' : 'movie';
   return fetch('https://api.themoviedb.org/3/' + ep + '/' + tmdbId + '?api_key=' + TMDB_API_KEY + '&language=tr-TR')
     .then(function(r) { return r.json(); })
     .then(function(d) {
-      return d.title || d.name || d.original_title || d.original_name || '';
+      return {
+        titleTr: d.title || d.name || '',
+        titleEn: d.original_title || d.original_name || ''
+      };
     })
-    .catch(function() { return ''; });
-}
-
-// Kelimeleri eşleştirmek için yardımcı fonksiyon (Doğru filmi bulmak adına)
-function calculateMatchScore(title, candidateText) {
-  var tWords = title.toLowerCase().split(/\s+/);
-  var cText = candidateText.toLowerCase();
-  var score = 0;
-  for (var i = 0; i < tWords.length; i++) {
-    if (tWords[i].length > 2 && cText.indexOf(tWords[i]) !== -1) {
-      score++;
-    }
-  }
-  return score;
+    .catch(function() { return { titleTr: '', titleEn: '' }; });
 }
 
 function getStreams(tmdbId, mediaType, season, episode) {
-  // Eklentinin Nuvio'da her daim görünür kalmasını sağlayan güvenli fallback
   var fallbackStream = {
     name: 'FilmDozu',
-    title: '⌜ FILMDOZU ⌟ | Bağlantı Bekleniyor...',
+    title: '⌜ FILMDOZU ⌟ | Alternatif Kaynak Bekleniyor',
     url: 'https://box-1097-y.vmbox.space/hls/xqx2o7ndpzokjiqbthkcpkqnuulsql4b3dgcr6d4z,y4ioiavo425vuaasaaa,q4ioiavo425elsjoxmq,.urlset/master.m3u8',
     quality: '1080p',
     type: 'hls',
@@ -51,80 +57,55 @@ function getStreams(tmdbId, mediaType, season, episode) {
     }
   };
 
-  return fetchTmdbTitle(tmdbId, mediaType).then(function(title) {
-    if (!title) {
+  return fetchTmdbInfo(tmdbId, mediaType).then(function(mediaInfo) {
+    var queryTitle = mediaInfo.titleTr || mediaInfo.titleEn;
+    if (!queryTitle) {
       return [fallbackStream];
     }
 
-    var searchUrl = PRIMARY_DOMAIN + '/?s=' + encodeURIComponent(title);
-    return fetch(searchUrl, { headers: PAGE_HEADERS })
-      .then(function(r) { return r.ok ? r.text() : ''; })
-      .then(function(html) {
-        // Arama sonucundaki tüm film bağlantılarını ve başlıklarını toplayalım
-        var items = [];
-        var regex = /<div[^>]+class="[^"]*item[^"]*"[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-        var match;
-        while ((match = regex.exec(html)) !== null) {
-          items.push({
-            url: match[1],
-            text: match[2]
-          });
-        }
+    var slug = slugify(queryTitle);
+    var targetUrl = PRIMARY_DOMAIN + '/' + slug + '-izle/';
 
-        // Eğer ilk regex yakalayamazsa alternatif basit link yakalayıcıyı çalıştır
-        if (!items.length) {
-          var simpleRegex = /href="(https:\/\/filmdozu\.com\/[^"]+\-izle\/)"/gi;
-          while ((match = simpleRegex.exec(html)) !== null) {
-            items.push({ url: match[1], text: match[1] });
-          }
-        }
+    if (mediaType === 'tv' && season && episode) {
+      targetUrl = PRIMARY_DOMAIN + '/' + slug + '-sezon-' + season + '-bolum-' + episode + '-izle/';
+    }
 
-        if (!items.length) {
+    return fetch(targetUrl, { headers: PAGE_HEADERS })
+      .then(function(r) {
+        if (!r.ok) {
+          return [fallbackStream];
+        }
+        return r.text();
+      })
+      .then(function(pageHtml) {
+        if (typeof pageHtml !== 'string' || !pageHtml) {
           return [fallbackStream];
         }
 
-        // Aranan filme EN ÇOK benzeyen sayfayı akıllıca seçelim (Tek tip film sorununu çözen yer burası)
-        var bestItem = items[0];
-        var highestScore = -1;
-        for (var j = 0; j < items.length; j++) {
-          var sc = calculateMatchScore(title, items[j].text + ' ' + items[j].url);
-          if (sc > highestScore) {
-            highestScore = sc;
-            bestItem = items[j];
-          }
+        // Sitede karşılaşılabilecek tüm olası video kaynaklarını (Okru, M3U8, VidMoly, İframe kaynakları vb.) tarıyoruz
+        var match = pageHtml.match(/(https?:\/\/[^"'\s]+\.okcdn\.ru[^"'\s]*)/i)
+                 || pageHtml.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i)
+                 || pageHtml.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i)
+                 || pageHtml.match(/src="(https?:\/\/[^"'\s]+embed[^"'\s]*)"/i)
+                 || pageHtml.match(/src="(https?:\/\/[^"'\s]+player[^"'\s]*)"/i);
+
+        if (!match) {
+          return [fallbackStream];
         }
 
-        var targetUrl = bestItem.url;
-        if (mediaType === 'tv' && season && episode) {
-          targetUrl = targetUrl.replace(/\/$/, '') + '/sezon-' + season + '/bolum-' + episode + '/';
-        }
-
-        return fetch(targetUrl, { headers: PAGE_HEADERS })
-          .then(function(r) { return r.ok ? r.text() : ''; })
-          .then(function(pageHtml) {
-            // Sayfa içerisinden .m3u8 veya farklı video kaynak kalıplarını arayalım
-            var streamMatch = pageHtml.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i) 
-                           || pageHtml.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i)
-                           || pageHtml.match(/(https?:\/\/[^"'\s]+okru[^"'\s]*)/i);
-
-            if (!streamMatch) {
-              return [fallbackStream];
+        return [
+          {
+            name: 'FilmDozu',
+            title: '⌜ FILMDOZU ⌟ | ' + queryTitle + ' | Çoklu Kaynak',
+            url: match[1],
+            quality: '1080p',
+            type: 'hls',
+            headers: {
+              'User-Agent': ANDROID_UA,
+              'Referer': targetUrl
             }
-
-            return [
-              {
-                name: 'FilmDozu',
-                title: '⌜ FILMDOZU ⌟ | ' + title + ' | 1080p',
-                url: streamMatch[1],
-                quality: '1080p',
-                type: 'hls',
-                headers: {
-                  'User-Agent': ANDROID_UA,
-                  'Referer': targetUrl
-                }
-              }
-            ];
-          });
+          }
+        ];
       })
       .catch(function() {
         return [fallbackStream];
