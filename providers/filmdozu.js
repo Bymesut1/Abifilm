@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Kararlı Sürüm)
+//  FilmDozu — Nuvio Provider (Kesin ve Kararlı Sürüm)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -32,9 +32,9 @@ function getStreams(tmdbId, mediaType, season, episode) {
     return fetch(searchUrl, { headers: PAGE_HEADERS })
       .then(function(r) { return r.ok ? r.text() : ''; })
       .then(function(html) {
-        var match = html.match(/<a[^>]+href="([^"]+)"[^>]*class="[^"]*item[^"]*"/i) 
-                 || html.match(/<div[^>]+class="[^"]*item[^"]*">[\s\S]*?<a[^>]+href="([^"]+)"/i)
-                 || html.match(/<a[^>]+href="(https:\/\/filmdozu\.com\/[^"]+)"/i);
+        // Arama sonuç sayfasından film bağlantısını güvenli bir şekilde çekiyoruz
+        var match = html.match(/href="(https:\/\/filmdozu\.com\/[^"]+)"/i) 
+                 || html.match(/href="(\/[^"]+)"/i);
 
         if (!match || !match[1]) return [];
 
@@ -50,6 +50,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
         return fetch(targetUrl, { headers: PAGE_HEADERS })
           .then(function(r) { return r.ok ? r.text() : ''; })
           .then(function(pageHtml) {
+            // Filmin kendi sayfasındaki m3u8 veya vmbox akış adresini yakalıyoruz
             var streamMatch = pageHtml.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i)
                            || pageHtml.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls\/[^"'\s]+)/i);
 
@@ -58,7 +59,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
             return [
               {
                 name: 'FilmDozu',
-                title: '⌜ FILMDOZU ⌟ | Dinamik HD | 1080p',
+                title: '⌜ FILMDOZU ⌟ | HD | 1080p',
                 url: streamMatch[1],
                 quality: '1080p',
                 type: 'hls',
