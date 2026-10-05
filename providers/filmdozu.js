@@ -61,25 +61,58 @@ function isRightMovie(html, title, origTitle, year) {
   return yearOk && titleOk;
 }
 
+// Arama sonuç sayfasındaki kartlardan { path, title, year } listesi çıkarır
+function parseSearchCards(html) {
+  var cards = [];
+  var chunks = String(html || '').split('<article class="card">');
+  for (var i = 1; i < chunks.length; i++) {
+    var c = chunks[i];
+    var href = (c.match(/href="(\/film\/[a-z0-9-]+)"/) || [])[1];
+    if (!href) continue;
+    var t = (c.match(/class="card-title"[^>]*>\s*([^<]+)/) || [])[1] ||
+            (c.match(/alt="([^"]*)"/) || [])[1] || '';
+    var y = (c.match(/<span>\s*(\d{4})\s*<\/span>/) || [])[1] || '';
+    cards.push({ path: href, title: decodeHtml(t).trim(), year: parseInt(y, 10) || 0 });
+  }
+  return cards;
+}
+
 async function findMoviePage(title, origTitle, year) {
+  var y = parseInt(year, 10);
+  var nTitle = norm(title);
+  var nOrig = norm(origTitle);
   var paths = [];
   function add(p) { if (p && paths.indexOf(p) === -1) paths.push(p); }
 
-  // 1) Doğrudan tahmin: /film/baslik
-  add('/film/' + slugify(title));
-  add('/film/' + slugify(origTitle));
-
-  // 2) Site içi arama: /ara?q=... (aynı anda)
-  var queries = [origTitle, title].filter(Boolean);
+  // 1) Site içi arama: /ara?q=... (aynı anda)
+  var queries = [origTitle, title].filter(function (q, i, a) { return q && a.indexOf(q) === i; });
   var results = await Promise.all(queries.map(function (q) {
     return getText(PRIMARY_DOMAIN + '/ara?q=' + encodeURIComponent(q));
   }));
+
+  var cards = [];
   results.forEach(function (html) {
-    var re = /href="(\/film\/[a-z0-9-]+)"/g, m;
-    while ((m = re.exec(html)) !== null) add(m[1]);
+    parseSearchCards(html).forEach(function (c) { cards.push(c); });
   });
 
-  // 3) Adayları aynı anda aç, yıl + başlık tutanı seç
+  function yearOk(c) { return c.year && Math.abs(c.year - y) <= 1; }
+  function titleOk(c) {
+    var n = norm(c.title);
+    return n && (n === nTitle || n === nOrig);
+  }
+
+  // Öncelik: yıl + başlık tutanlar, sonra sadece yıl tutanlar
+  cards.filter(function (c) { return yearOk(c) && titleOk(c); }).forEach(function (c) { add(c.path); });
+  cards.filter(function (c) { return yearOk(c); }).forEach(function (c) { add(c.path); });
+
+  // 2) Doğrudan tahmin: /film/baslik
+  add('/film/' + slugify(title));
+  add('/film/' + slugify(origTitle));
+
+  // 3) Yılı yanlış yazılmış olabilecek başlık eşleşmeleri
+  cards.filter(function (c) { return titleOk(c); }).forEach(function (c) { add(c.path); });
+
+  // 4) Adayları aynı anda aç, yıl + başlık tutanı seç
   var candidates = paths.slice(0, 6);
   var pages = await Promise.all(candidates.map(function (p) {
     return getText(PRIMARY_DOMAIN + p);
