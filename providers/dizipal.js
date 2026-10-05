@@ -112,6 +112,38 @@ async function resolvePlayer(player, pageUrl) {
   };
 }
 
+// Aynı adresi farklı oynatıcı ayarlarıyla sunar; hangisi çalışırsa o kullanılır
+function makeVariants(r, tag) {
+  var h = r.headers || {};
+  var noOrigin = { 'User-Agent': h['User-Agent'], 'Referer': h['Referer'] };
+  function mk(suffix, type, headers) {
+    return {
+      name: 'Dizipal' + tag + suffix,
+      title: '⌜ DİZİPAL ⌟ | HLS' + suffix,
+      url: r.url,
+      quality: 'Auto',
+      type: type,
+      headers: headers
+    };
+  }
+  return [
+    mk('', 'hls', h),
+    mk(' (başlıksız)', 'hls', {}),
+    mk(' (m3u8)', 'm3u8', noOrigin)
+  ];
+}
+
+// master listeyi başlıklı ve başlıksız çekip durum/içerik özeti çıkarır
+async function probeMaster(r) {
+  var a = await req(r.url, { headers: r.headers });
+  var b = await req(r.url, { headers: { 'User-Agent': ANDROID_UA } });
+  function d(x) { return x.status + (x.text.indexOf('#EXTM3U') === 0 ? ' ok' : ' ?'); }
+  var t = a.text.indexOf('#EXTM3U') === 0 ? a.text : (b.text || '');
+  var v = (t.match(/#EXT-X-STREAM-INF/g) || []).length;
+  var au = /#EXT-X-MEDIA:[^\n]*TYPE=AUDIO/.test(t) ? 1 : 0;
+  return 'master h:' + d(a) + ' n:' + d(b) + ' v' + v + ' a' + au;
+}
+
 async function run(tmdbId, mediaType, season, episode) {
   try {
     STEP = 'tmdb';
@@ -161,20 +193,32 @@ async function run(tmdbId, mediaType, season, episode) {
     STEP = 'getVideo';
     // 3) Tüm oynatıcıları aynı anda çöz
     var resolved = await Promise.all(players.map(function (p) { return resolvePlayer(p, pageUrl); }));
-    var streams = [], errors = [];
+    var streams = [], errors = [], first = null;
     for (var k = 0; k < players.length; k++) {
       var r = resolved[k];
       if (!r || r.error) { errors.push(r ? r.error : 'boş'); continue; }
-      streams.push({
-        name: 'Dizipal',
-        title: '⌜ DİZİPAL ⌟ | ' + (players.length > 1 ? 'Kaynak ' + (k + 1) : 'HLS'),
-        url: r.url,
-        quality: r.quality,
-        type: r.type,
-        headers: r.headers
-      });
+      if (!first) first = r;
+      var tag = players.length > 1 ? ' ' + (k + 1) : '';
+      streams = streams.concat(makeVariants(r, tag));
     }
     if (!streams.length) return debugStream(errors.join(' | '));
+
+    // Teşhis: master listeye erişim ve içeriği (listede ismin yanında görünür)
+    if (DEBUG && first) {
+      STEP = 'master';
+      var info = await Promise.race([
+        probeMaster(first),
+        new Promise(function (res) { setTimeout(function () { res('probe süresi doldu'); }, 4000); })
+      ]);
+      streams.push({
+        name: 'Dizipal ⚠ ' + info,
+        title: '⚠ ' + info,
+        url: first.url,
+        quality: 'Auto',
+        type: 'hls',
+        headers: first.headers
+      });
+    }
     return streams;
   } catch (err) {
     return debugStream('hata: ' + err);
