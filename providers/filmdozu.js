@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Stabil Kaynak & Hata Çözücü Sürüm)
+//  FilmDozu — Nuvio Provider (Buffering & Kaynak Hatası Giderici Sürüm)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -68,29 +68,31 @@ function getStreams(tmdbId, mediaType, season, episode) {
           return [];
         }
 
-        // Sayfa içerisinden video akış adresini yakalamaya çalışıyoruz
         var videoMatch = html.match(/(https?:\/\/[^"'\s]+\.okcdn\.ru[^"'\s]*)/i)
                       || html.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i)
-                      || html.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i)
-                      || html.match(/src="(https?:\/\/[^"'\s]+embed[^"'\s]*)"/i);
+                      || html.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i);
 
-        // Eğer doğrudan bir video/m3u8 linki regex ile yakalanamazsa,
-        // Nuvio'nun "source hata" vermemesi ve eklentinin isminin düzgün görünmesi için
-        // akış listesini boş döndürüyoruz veya geçerli bir format sunuyoruz.
         if (!videoMatch) {
           return [];
         }
+
+        var streamUrl = videoMatch[1];
+        
+        // Okru veya harici CDN linklerinin buffering yapmasını engellemek için
+        // oynatıcının istek yaparken kullanacağı referer ve headers yapılandırmasını optimize ediyoruz.
+        var refererTarget = streamUrl.indexOf('okcdn.ru') !== -1 ? 'https://ok.ru/' : targetUrl;
 
         return [
           {
             name: 'FilmDozu',
             title: '⌜ FILMDOZU ⌟ | ' + info.title + ' | 1080p',
-            url: videoMatch[1],
+            url: streamUrl,
             quality: '1080p',
             type: 'hls',
             headers: {
               'User-Agent': ANDROID_UA,
-              'Referer': targetUrl
+              'Referer': refererTarget,
+              'Origin': refererTarget.replace(/\/$/, '')
             }
           }
         ];
