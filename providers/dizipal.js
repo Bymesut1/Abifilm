@@ -1,10 +1,12 @@
 // ============================================================
-//  Dizipal — Nuvio Provider
+//  Dizipal — Nuvio Provider (teşhis modlu)
 //  Site adresi değişirse sadece PRIMARY_DOMAIN satırını güncelle.
+//  DEBUG = true iken kaynak çıkmazsa listede "⚠ ..." satırı ile sebebi yazar.
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://dizipal2135.com';
 var TMDB_KEY = '000316508321ce461cf81e7c6815eec7';
+var DEBUG = true;
 var ANDROID_UA = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36';
 
 var PAGE_HEADERS = {
@@ -29,27 +31,32 @@ function slugify(s) {
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
-async function getText(url, headers) {
+// Durum kodu + metin döndürür (hata olsa da)
+async function req(url, opts) {
   try {
-    var res = await withTimeout(fetch(url, { headers: headers || PAGE_HEADERS }), 8000);
-    if (!res.ok) return '';
-    return await withTimeout(res.text(), 8000);
+    var res = await withTimeout(fetch(url, opts), 8000);
+    var text = '';
+    try { text = await withTimeout(res.text(), 8000); } catch (e) {}
+    return { status: res.status, text: text || '' };
   } catch (e) {
-    return '';
+    return { status: 0, text: '', err: String(e && e.message ? e.message : e) };
   }
 }
 
-async function postForm(url, body, headers) {
-  try {
-    var res = await withTimeout(fetch(url, { method: 'POST', headers: headers, body: body }), 8000);
-    if (!res.ok) return '';
-    return await withTimeout(res.text(), 8000);
-  } catch (e) {
-    return '';
-  }
+function debugStream(msg) {
+  console.log('[Dizipal] ' + msg);
+  if (!DEBUG) return [];
+  return [{
+    name: 'Dizipal',
+    title: '⚠ ' + msg,
+    url: 'https://example.com/debug.m3u8',
+    quality: 'Auto',
+    type: 'hls',
+    headers: {}
+  }];
 }
 
-// Bölüm/film sayfasındaki oynatıcı iframe'lerini bulur: https://HOST/video/32HANELİKİMLİK
+// Sayfadaki oynatıcı iframe'lerini bulur: https://HOST/video/32HANELİKİMLİK
 function extractPlayers(html) {
   var text = String(html || '').replace(/\\\//g, '/').replace(/&amp;/g, '&');
   var out = [], seen = {};
@@ -65,32 +72,34 @@ function extractPlayers(html) {
 // Oynatıcının getVideo servisinden taze (süreli) HLS adresini alır
 async function resolvePlayer(player, pageUrl) {
   var base = 'https://' + player.host;
-  var txt = await postForm(
-    base + '/player/index.php?data=' + player.id + '&do=getVideo',
-    'hash=' + player.id + '&r=' + encodeURIComponent(pageUrl),
-    {
+  var r = await req(base + '/player/index.php?data=' + player.id + '&do=getVideo', {
+    method: 'POST',
+    headers: {
       'User-Agent': ANDROID_UA,
       'Accept': 'application/json, text/javascript, */*; q=0.01',
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       'X-Requested-With': 'XMLHttpRequest',
       'Origin': base,
       'Referer': base + '/video/' + player.id
-    }
-  );
-  if (!txt) return null;
+    },
+    body: 'hash=' + player.id + '&r=' + encodeURIComponent(pageUrl)
+  });
 
   var url = '';
   try {
-    var j = JSON.parse(txt);
+    var j = JSON.parse(r.text);
     url = j.securedLink || j.videoSource || '';
   } catch (e) {}
 
   if (!url) {
-    var clean = txt.replace(/\\\//g, '/');
+    var clean = r.text.replace(/\\\//g, '/');
     var m = clean.match(/https?:\/\/[^"'\s\\]+?master\.(?:txt|m3u8)[^"'\s\\]*/);
     if (m) url = m[0];
   }
-  if (!url) return null;
+  if (!url) {
+    return { error: 'getVideo HTTP ' + r.status + (r.err ? ' ' + r.err : '') + ' ' +
+                    r.text.replace(/\s+/g, ' ').slice(0, 70) };
+  }
   url = url.replace(/\\\//g, '/');
   if (url.indexOf('http') !== 0) url = base + (url.charAt(0) === '/' ? '' : '/') + url;
 
@@ -107,20 +116,20 @@ async function getStreams(tmdbId, mediaType, season, episode) {
     var isTv = mediaType === 'tv';
 
     // 1) TMDB'den başlık
-    var tmdbRes = await withTimeout(fetch(
-      'https://api.themoviedb.org/3/' + (isTv ? 'tv' : 'movie') + '/' + tmdbId +
-      '?language=tr-TR&api_key=' + TMDB_KEY
-    ), 8000);
-    var info = await tmdbRes.json();
+    var t = await req('https://api.themoviedb.org/3/' + (isTv ? 'tv' : 'movie') + '/' + tmdbId +
+                      '?language=tr-TR&api_key=' + TMDB_KEY);
+    var info = {};
+    try { info = JSON.parse(t.text); } catch (e) {}
     var title = isTv ? info.name : info.title;
     var origTitle = isTv ? info.original_name : info.original_title;
+    if (!title && !origTitle) return debugStream('TMDB boş, HTTP ' + t.status + (t.err ? ' ' + t.err : ''));
 
     var slugs = [];
-    [title, origTitle].forEach(function (t) {
-      var s = slugify(t);
+    [title, origTitle].forEach(function (x) {
+      var s = slugify(x);
       if (s && slugs.indexOf(s) === -1) slugs.push(s);
     });
-    if (!slugs.length) return [];
+    if (!slugs.length) return debugStream('başlıktan adres üretilemedi: ' + title);
 
     // 2) Sayfa adresi: /bolum/{dizi}-{sezon}-sezon-{bolum}-bolum  veya  /film/{ad}
     var s = parseInt(season, 10) || 1;
@@ -128,24 +137,30 @@ async function getStreams(tmdbId, mediaType, season, episode) {
     var paths = slugs.map(function (slug) {
       return isTv ? '/bolum/' + slug + '-' + s + '-sezon-' + e + '-bolum' : '/film/' + slug;
     });
-    var pages = await Promise.all(paths.map(function (p) { return getText(PRIMARY_DOMAIN + p); }));
+    var pages = await Promise.all(paths.map(function (p) {
+      return req(PRIMARY_DOMAIN + p, { headers: PAGE_HEADERS });
+    }));
 
     var pageUrl = '', players = [];
     for (var i = 0; i < pages.length; i++) {
-      var found = pages[i] ? extractPlayers(pages[i]) : [];
+      var found = extractPlayers(pages[i].text);
       if (found.length) { players = found; pageUrl = PRIMARY_DOMAIN + paths[i]; break; }
     }
     if (!players.length) {
-      console.log('[Dizipal] oynatıcı bulunamadı: ' + title);
-      return [];
+      var p0 = pages[0], tx = p0.text;
+      return debugStream('sayfa ' + paths[0] + ' HTTP ' + p0.status + ', ' + tx.length + ' bayt, ' +
+        'iframe:' + (tx.match(/<iframe/gi) || []).length +
+        ', imagestoo:' + (/imagestoo/i.test(tx) ? 'var' : 'yok') +
+        (/just a moment|cloudflare|cf-chl|attention required/i.test(tx) ? ', CF koruması' : '') +
+        (p0.err ? ', ' + p0.err : ''));
     }
 
     // 3) Tüm oynatıcıları aynı anda çöz
     var resolved = await Promise.all(players.map(function (p) { return resolvePlayer(p, pageUrl); }));
-    var streams = [];
+    var streams = [], errors = [];
     for (var k = 0; k < players.length; k++) {
       var r = resolved[k];
-      if (!r) continue;
+      if (!r || r.error) { errors.push(r ? r.error : 'boş'); continue; }
       streams.push({
         name: 'Dizipal',
         title: '⌜ DİZİPAL ⌟ | ' + (players.length > 1 ? 'Kaynak ' + (k + 1) : 'HLS'),
@@ -155,10 +170,10 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         headers: r.headers
       });
     }
+    if (!streams.length) return debugStream(errors.join(' | '));
     return streams;
   } catch (err) {
-    console.log('[Dizipal] hata: ' + err);
-    return [];
+    return debugStream('hata: ' + err);
   }
 }
 
