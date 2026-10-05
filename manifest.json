@@ -1,13 +1,13 @@
 {
-  "id": "app.bymesut1.yenifilm",
-  "name": "Yeni Film Plugins",
+  "id": "app.bymesut1.abifilm",
+  "name": "Abi Film",
   "logo": "https://raw.githubusercontent.com/Bymesut1/Yeni-film/main/images/icon.png",
   "version": "0.1.0",
   "author": "Bymesut1",
   "scrapers": [
     {
-      "id": "filmdozu",
-      "name": "FilmDozu",
+      "id": "abifilm",
+      "name": "Abi Film",
       "logo": "https://www.google.com/s2/favicons?domain=filmdozu.com&sz=64",
       "version": "0.1.0",
       "filename": "providers/filmdozu.js",
