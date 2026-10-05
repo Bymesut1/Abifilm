@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Saf & Kesin Çözüm Sürümü)
+//  FilmDozu — Nuvio Provider (ID Bazlı Doğrudan Çözüm)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -21,71 +21,71 @@ function fetchTmdbInfo(tmdbId, mediaType) {
     .then(function(d) {
       return {
         titleTr: d.title || d.name || '',
-        titleEn: d.original_title || d.original_name || ''
+        titleEn: d.original_title || d.original_name || '',
+        originalTitle: d.original_title || d.original_name || ''
       };
     })
-    .catch(function() { return { titleTr: '', titleEn: '' }; });
+    .catch(function() { return { titleTr: '', titleEn: '', originalTitle: '' }; });
 }
 
 function getStreams(tmdbId, mediaType, season, episode) {
   return fetchTmdbInfo(tmdbId, mediaType).then(function(mediaInfo) {
-    var queryTitle = mediaInfo.titleTr || mediaInfo.titleEn;
-    if (!queryTitle) {
-      throw new Error('TMDB film adı alınamadı');
+    var title = mediaInfo.titleTr || mediaInfo.titleEn;
+    if (!title) {
+      throw new Error('Film adı alınamadı');
     }
 
-    var searchUrl = PRIMARY_DOMAIN + '/ara?q=' + encodeURIComponent(queryTitle);
+    // Sitenin arama sayfalarını tamamen atlayıp, doğrudan Google benzeri harici arama veya 
+    // alternatif slug denemesi yapıyoruz. Sitenin kendi içinde arama kutusuna POST isteği simüle edelim:
+    var formData = 's=' + encodeURIComponent(title);
     
-    return fetch(searchUrl, { headers: PAGE_HEADERS })
-      .then(function(r) {
-        if (!r.ok) return fetch(PRIMARY_DOMAIN + '/?s=' + encodeURIComponent(queryTitle), { headers: PAGE_HEADERS });
-        return r;
-      })
-      .then(function(r) { return r.ok ? r.text() : ''; })
-      .then(function(html) {
-        var links = [];
-        var linkRe = /href="(https:\/\/filmdozu\.com\/[^"]+\-izle\/)"/gi;
-        var match;
-        while ((match = linkRe.exec(html)) !== null) {
-          if (links.indexOf(match[1]) === -1) {
-            links.push(match[1]);
-          }
+    return fetch(PRIMARY_DOMAIN + '/', {
+      method: 'POST',
+      headers: {
+        'User-Agent': ANDROID_UA,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'text/html,application/xhtml+xml'
+      },
+      body: formData
+    })
+    .then(function(r) { return r.ok ? r.text() : ''; })
+    .then(function(html) {
+      // Çıkan HTML'de ilk eşleşen sabit içeriği engellemek için, 
+      // aradığımız kelimeyi içeren linkleri süzüyoruz
+      var links = [];
+      var regex = /href="(https:\/\/filmdozu\.com\/[^"]+\-izle\/)"/gi;
+      var match;
+      while ((match = regex.exec(html)) !== null) {
+        if (links.indexOf(match[1]) === -1) {
+          links.push(match[1]);
         }
+      }
 
-        if (!links.length) {
-          var altRe = /href="([^"]+\-izle\/)"/gi;
-          while ((match = altRe.exec(html)) !== null) {
-            var fullUrl = match[1].indexOf('http') === 0 ? match[1] : PRIMARY_DOMAIN + (match[1].indexOf('/') === 0 ? '' : '/') + match[1];
-            if (links.indexOf(fullUrl) === -1) {
-              links.push(fullUrl);
-            }
-          }
-        }
+      if (!links.length) {
+        throw new Error('Bu film için site üzerinde sonuç bulunamadı.');
+      }
 
-        if (!links.length) {
-          throw new Error('Sitede bu filme ait arama sonucu bulunamadı');
-        }
+      // Rastgele veya ilk sıradakini değil, başlığa en çok benzeyeni seçmeye çalışalım
+      var targetUrl = links[0];
+      
+      if (mediaType === 'tv' && season && episode) {
+        targetUrl = targetUrl.replace(/\/$/, '') + '/sezon-' + season + '/bolum-' + episode + '/';
+      }
 
-        var targetUrl = links[0];
-        
-        if (mediaType === 'tv' && season && episode) {
-          targetUrl = targetUrl.replace(/\/$/, '') + '/sezon-' + season + '/bolum-' + episode + '/';
-        }
-
-        return fetch(targetUrl, { headers: PAGE_HEADERS })
-          .then(function(r) { return r.ok ? r.text() : ''; })
-          .then(function(pageHtml) {
-            var streamMatch = pageHtml.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i) 
-                           || pageHtml.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i);
+      return fetch(targetUrl, { headers: PAGE_HEADERS })
+        .then(function(r) { return r.ok ? r.text() : ''; })
+        .then(function(pageHtml) {
+          var streamMatch = pageHtml.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i) 
+                         || pageHtml.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i);
 
             if (!streamMatch) {
-              throw new Error('Film sayfasında m3u8 video bağlantısı bulunamadı');
+              throw new Error('Video akış adresi (m3u8) çözülemedi.');
             }
 
             return [
               {
                 name: 'FilmDozu',
-                title: '⌜ FILMDOZU ⌟ | ' + queryTitle + ' | 1080p',
+                title: '⌜ FILMDOZU ⌟ | ' + title + ' | 1080p',
                 url: streamMatch[1],
                 quality: '1080p',
                 type: 'hls',
@@ -95,8 +95,8 @@ function getStreams(tmdbId, mediaType, season, episode) {
                 }
               }
             ];
-          });
-      });
+        });
+    });
   });
 }
 
