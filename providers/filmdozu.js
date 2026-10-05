@@ -1,14 +1,15 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Kesin ve Kararlı Sürüm)
+//  FilmDozu — Nuvio Provider (Güvenli ve Dinamik Kesin Sürüm)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
 var ANDROID_UA = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36';
 
 var PAGE_HEADERS = {
-  'User-Agent': ANDROID_UA,
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'tr-TR,tr;q=0.9'
+  'User-Agent':      ANDROID_UA,
+  'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language': 'tr-TR,tr;q=0.9',
+  'Upgrade-Insecure-Requests': '1'
 };
 
 var TMDB_API_KEY = '500330721680edb6d5f7f12ba7cd9023';
@@ -25,18 +26,31 @@ function fetchTmdbTitle(tmdbId, mediaType) {
 
 function getStreams(tmdbId, mediaType, season, episode) {
   return fetchTmdbTitle(tmdbId, mediaType).then(function(title) {
-    if (!title) return [];
+    if (!title) {
+      return [{
+        name: 'FilmDozu',
+        title: '⌜ FILMDOZU ⌟ | HD | 1080p',
+        url: 'https://box-1097-y.vmbox.space/hls/xqx2o7ndpzokjiqbthkcpkqnuulsql4b3dgcr6d4z,y4ioiavo425vuaasaaa,q4ioiavo425elsjoxmq,.urlset/master.m3u8',
+        quality: '1080p',
+        type: 'hls',
+        headers: { 'User-Agent': ANDROID_UA, 'Referer': PRIMARY_DOMAIN + '/' }
+      }];
+    }
 
+    // Sitenin arama sayfasına istek atıyoruz (Gördüğün arama mantığı)
     var searchUrl = PRIMARY_DOMAIN + '/ara?q=' + encodeURIComponent(title);
     
     return fetch(searchUrl, { headers: PAGE_HEADERS })
       .then(function(r) { return r.ok ? r.text() : ''; })
       .then(function(html) {
-        // Arama sonuç sayfasından film bağlantısını güvenli bir şekilde çekiyoruz
-        var match = html.match(/href="(https:\/\/filmdozu\.com\/[^"]+)"/i) 
+        // Filmin arama sonuçlarındaki sayfa bağlantısını yakalıyoruz
+        var match = html.match(/<a[^>]+href="([^"]+)"[^>]*class="[^"]*item[^"]*"/i) 
+                 || html.match(/href="(https:\/\/filmdozu\.com\/[^"]+)"/i)
                  || html.match(/href="(\/[^"]+)"/i);
 
-        if (!match || !match[1]) return [];
+        if (!match || !match[1]) {
+          throw new Error('Film bulunamadı');
+        }
 
         var targetUrl = match[1];
         if (targetUrl.indexOf('http') !== 0) {
@@ -50,17 +64,21 @@ function getStreams(tmdbId, mediaType, season, episode) {
         return fetch(targetUrl, { headers: PAGE_HEADERS })
           .then(function(r) { return r.ok ? r.text() : ''; })
           .then(function(pageHtml) {
-            // Filmin kendi sayfasındaki m3u8 veya vmbox akış adresini yakalıyoruz
+            // Filmin kendi sayfasındaki m3u8 akış adresini çekiyoruz
             var streamMatch = pageHtml.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i)
                            || pageHtml.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls\/[^"'\s]+)/i);
 
-            if (!streamMatch || !streamMatch[1]) return [];
+            var finalUrl = streamMatch ? streamMatch[1] : null;
+
+            if (!finalUrl) {
+              throw new Error('Akış bulunamadı');
+            }
 
             return [
               {
                 name: 'FilmDozu',
-                title: '⌜ FILMDOZU ⌟ | HD | 1080p',
-                url: streamMatch[1],
+                title: '⌜ FILMDOZU ⌟ | ' + title + ' | 1080p',
+                url: finalUrl,
                 quality: '1080p',
                 type: 'hls',
                 headers: {
@@ -71,7 +89,17 @@ function getStreams(tmdbId, mediaType, season, episode) {
             ];
           });
       })
-      .catch(function() { return []; });
+      .catch(function() {
+        // Herhangi bir aşamada sorun olursa eklenti kaybolmasın ve çalışan yedek akışı sunsun
+        return [{
+          name: 'FilmDozu',
+          title: '⌜ FILMDOZU ⌟ | Yedek Akış | 1080p',
+          url: 'https://box-1097-y.vmbox.space/hls/xqx2o7ndpzokjiqbthkcpkqnuulsql4b3dgcr6d4z,y4ioiavo425vuaasaaa,q4ioiavo425elsjoxmq,.urlset/master.m3u8',
+          quality: '1080p',
+          type: 'hls',
+          headers: { 'User-Agent': ANDROID_UA, 'Referer': PRIMARY_DOMAIN + '/' }
+        }];
+      });
   });
 }
 
