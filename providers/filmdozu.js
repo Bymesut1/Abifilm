@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Saf & Sabit Linklerden Arındırılmış Sürüm)
+//  FilmDozu — Nuvio Provider (Dinamik & Görünür Sürüm)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -27,20 +27,30 @@ function fetchTmdbTitle(tmdbId, mediaType) {
 function getStreams(tmdbId, mediaType, season, episode) {
   return fetchTmdbTitle(tmdbId, mediaType).then(function(title) {
     if (!title) {
-      return []; // Sabit link yok, film adı alınamazsa boş döner
+      return [];
     }
 
     var searchUrl = PRIMARY_DOMAIN + '/?s=' + encodeURIComponent(title);
     return fetch(searchUrl, { headers: PAGE_HEADERS })
       .then(function(r) { return r.ok ? r.text() : ''; })
       .then(function(html) {
-        // Sitedeki arama sonuçlarında film kartlarını yakalıyoruz
-        var match = html.match(/<div[^>]+class="[^"]*item[^"]*"[\s\S]*?<a[^>]+href="([^"]+)"/i);
-        if (!match || !match[1]) {
-          return []; // Sabit linke düşmek yok! Bulamazsa boş dönecek.
+        // Sitedeki tüm film kartı bağlantılarını toplayalım
+        var links = [];
+        var regex = /href="(https:\/\/filmdozu\.com\/[^"]+\-izle\/)"/gi;
+        var match;
+        while ((match = regex.exec(html)) !== null) {
+          if (links.indexOf(match[1]) === -1) {
+            links.push(match[1]);
+          }
         }
 
-        var targetUrl = match[1];
+        if (!links.length) {
+          return [];
+        }
+
+        // İlk sıradaki sabit sonuca körü körüne bağlanmak yerine, 
+        // aranan kelimeye en uygun olanı seçmeye çalışalım veya bulduğumuz ilk adrese gidelim
+        var targetUrl = links[0];
         if (mediaType === 'tv' && season && episode) {
           targetUrl = targetUrl.replace(/\/$/, '') + '/sezon-' + season + '/bolum-' + episode + '/';
         }
@@ -48,12 +58,11 @@ function getStreams(tmdbId, mediaType, season, episode) {
         return fetch(targetUrl, { headers: PAGE_HEADERS })
           .then(function(r) { return r.ok ? r.text() : ''; })
           .then(function(pageHtml) {
-            // Sadece sayfadan gerçek m3u8 bulursa oynatacak
             var streamMatch = pageHtml.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i) 
                            || pageHtml.match(/(https?:\/\/box-\d+-[^"'\s]+\/hls[^"'\s]+)/i);
 
             if (!streamMatch) {
-              return []; // Yine sabit link yok, m3u8 çıkmazsa boş döner
+              return [];
             }
 
             return [
