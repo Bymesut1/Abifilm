@@ -1,5 +1,5 @@
 // ============================================================
-//  Abi Film — Nuvio Provider (Gerçek Dinamik Çözücü Sürüm)
+//  Abi Film — Nuvio Provider (Gelişmiş Kapsamlı Sürüm)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -37,10 +37,11 @@ function fetchTmdbInfo(tmdbId, mediaType) {
     .then(function(r) { return r.json(); })
     .then(function(d) {
       return {
-        title: d.title || d.name || d.original_title || d.original_name || ''
+        title: d.title || d.name || d.original_title || d.original_name || '',
+        year: (d.release_date || d.first_air_date || '').substring(0, 4)
       };
     })
-    .catch(function() { return { title: '' }; });
+    .catch(function() { return { title: '', year: '' }; });
 }
 
 function decodeDcHello(parts) {
@@ -52,7 +53,25 @@ function decodeDcHello(parts) {
   }
 }
 
+function parseTracks(html) {
+  var subs = [];
+  var tagRe = /<track[^>]+>/gi;
+  var tm;
+  while ((tm = tagRe.exec(html)) !== null) {
+    var tag = tm[0];
+    if (tag.indexOf('captions') === -1 && tag.indexOf('subtitles') === -1) continue;
+    var srcM = tag.match(/\bsrc=["']([^"']+)["']/i);
+    var labM = tag.match(/\blabel=["']([^"']+)["']/i);
+    if (!srcM) continue;
+    var tUrl = srcM[1].startsWith('http') ? srcM[1] : PRIMARY_DOMAIN + srcM[1];
+    var lang = labM ? labM[1] : 'TR';
+    subs.push({ url: tUrl, language: lang, label: lang });
+  }
+  return subs;
+}
+
 function getStreams(tmdbId, mediaType, season, episode) {
+  // Test veya özel ID çağrıları için garantili test kaynağı döndür
   if (!tmdbId || tmdbId == '0' || tmdbId == 'test') {
     return Promise.resolve([
       {
@@ -82,21 +101,33 @@ function getStreams(tmdbId, mediaType, season, episode) {
 
     return fetch(targetUrl, { headers: PAGE_HEADERS })
       .then(function(r) {
-        if (!r.ok) return [];
+        if (!r.ok) {
+          // Alternatif slug denemesi (yıl ekleyerek veya sadeleştirerek)
+          var altUrl = PRIMARY_DOMAIN + '/' + cleanSlug + '-' + (info.year || '') + '-izle/';
+          return fetch(altUrl, { headers: PAGE_HEADERS }).then(function(res) {
+            if (!res.ok) throw new Error('Sayfa bulunamadı');
+            targetUrl = altUrl;
+            return res.text();
+          });
+        }
         return r.text();
       })
       .then(function(html) {
         if (typeof html !== 'string' || !html) return [];
 
-        // Sayfa içerisindeki gömülü kaynakları ve m3u8 linklerini dinamik ayıkla
+        var subtitles = parseTracks(html);
+
+        // Sayfa içerisindeki video kaynaklarını derinlemesine ara
         var videoMatch = html.match(/(https?:\/\/[^"'\s]+\.m3u8[^"'\s]*)/i)
                       || html.match(/(https?:\/\/[^"'\s]+\.okcdn\.ru[^"'\s]*)/i)
-                      || html.match(/file\s*:\s*["']([^"']+\.m3u8[^"']*)["']/i);
+                      || html.match(/file\s*:\s*["']([^"']+\.m3u8[^"']*)["']/i)
+                      || html.match(/src\s*:\s*["'](https?:\/\/[^"']+\/hls[^"']*)["']/i);
 
         if (!videoMatch) return [];
 
         var streamUrl = videoMatch[1] || videoMatch[0];
-        
+        var refererTarget = streamUrl.indexOf('okcdn.ru') !== -1 ? 'https://ok.ru/' : targetUrl;
+
         return [
           {
             name: 'Abi Film',
@@ -106,9 +137,10 @@ function getStreams(tmdbId, mediaType, season, episode) {
             type: 'hls',
             headers: {
               'User-Agent': ANDROID_UA,
-              'Referer': PRIMARY_DOMAIN + '/',
-              'Origin': PRIMARY_DOMAIN
-            }
+              'Referer': refererTarget,
+              'Origin': refererTarget.replace(/\/$/, '')
+            },
+            subtitles: subtitles.length > 0 ? subtitles : undefined
           }
         ];
       })
