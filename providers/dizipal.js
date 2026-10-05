@@ -7,6 +7,7 @@
 var PRIMARY_DOMAIN = 'https://dizipal2135.com';
 var TMDB_KEY = '000316508321ce461cf81e7c6815eec7';
 var DEBUG = true;
+var STEP = '';
 var ANDROID_UA = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36';
 
 var PAGE_HEADERS = {
@@ -34,9 +35,9 @@ function slugify(s) {
 // Durum kodu + metin döndürür (hata olsa da)
 async function req(url, opts) {
   try {
-    var res = await withTimeout(fetch(url, opts), 8000);
+    var res = await withTimeout(fetch(url, opts), 6000);
     var text = '';
-    try { text = await withTimeout(res.text(), 8000); } catch (e) {}
+    try { text = await withTimeout(res.text(), 6000); } catch (e) {}
     return { status: res.status, text: text || '' };
   } catch (e) {
     return { status: 0, text: '', err: String(e && e.message ? e.message : e) };
@@ -111,8 +112,9 @@ async function resolvePlayer(player, pageUrl) {
   };
 }
 
-async function getStreams(tmdbId, mediaType, season, episode) {
+async function run(tmdbId, mediaType, season, episode) {
   try {
+    STEP = 'tmdb';
     var isTv = mediaType === 'tv';
 
     // 1) TMDB'den başlık
@@ -131,6 +133,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
     });
     if (!slugs.length) return debugStream('başlıktan adres üretilemedi: ' + title);
 
+    STEP = 'sayfa';
     // 2) Sayfa adresi: /bolum/{dizi}-{sezon}-sezon-{bolum}-bolum  veya  /film/{ad}
     var s = parseInt(season, 10) || 1;
     var e = parseInt(episode, 10) || 1;
@@ -155,6 +158,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         (p0.err ? ', ' + p0.err : ''));
     }
 
+    STEP = 'getVideo';
     // 3) Tüm oynatıcıları aynı anda çöz
     var resolved = await Promise.all(players.map(function (p) { return resolvePlayer(p, pageUrl); }));
     var streams = [], errors = [];
@@ -175,6 +179,17 @@ async function getStreams(tmdbId, mediaType, season, episode) {
   } catch (err) {
     return debugStream('hata: ' + err);
   }
+}
+
+// Toplam süre sınırı: takılırsa hangi adımda kaldığını yazar
+async function getStreams(tmdbId, mediaType, season, episode) {
+  var timer;
+  var timeout = new Promise(function (resolve) {
+    timer = setTimeout(function () { resolve(debugStream('zaman aşımı, adım: ' + STEP)); }, 12000);
+  });
+  var out = await Promise.race([run(tmdbId, mediaType, season, episode), timeout]);
+  clearTimeout(timer);
+  return out;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
