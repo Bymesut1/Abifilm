@@ -1,5 +1,5 @@
 // ============================================================
-//  FilmDozu — Nuvio Provider (Kesin Çalışan & Dinamik Eşleşme Sürümü)
+//  FilmDozu — Nuvio Provider (Kesin Çözüm & Dinamik Arama Sürümü)
 // ============================================================
 
 var PRIMARY_DOMAIN = 'https://filmdozu.com';
@@ -50,59 +50,51 @@ function getStreams(tmdbId, mediaType, season, episode) {
   };
 
   return fetchTmdbInfo(tmdbId, mediaType).then(function(mediaInfo) {
-    var titleTr = mediaInfo.titleTr;
-    var titleEn = mediaInfo.titleEn;
-    var year    = mediaInfo.year;
-    var queryTitle = titleTr || titleEn;
-
+    var queryTitle = mediaInfo.titleTr || mediaInfo.titleEn;
     if (!queryTitle) {
       return [fallbackStream];
     }
 
-    var searchUrl = PRIMARY_DOMAIN + '/?s=' + encodeURIComponent(queryTitle);
+    // Sitenin arama sayfasına istek atıyoruz
+    var searchUrl = PRIMARY_DOMAIN + '/ara?q=' + encodeURIComponent(queryTitle);
+    
     return fetch(searchUrl, { headers: PAGE_HEADERS })
+      .then(function(r) {
+        if (!r.ok) return fetch(PRIMARY_DOMAIN + '/?s=' + encodeURIComponent(queryTitle), { headers: PAGE_HEADERS });
+        return r;
+      })
       .then(function(r) { return r.ok ? r.text() : ''; })
       .then(function(html) {
-        // Çalışan kodunuzdaki gibi arama sayfasındaki tüm film kartlarını topluyoruz
-        var results = [];
-        var cardRe = /<div[^>]+class="[^"]*item[^"]*"[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-        var matchCard;
-        while ((matchCard = cardRe.exec(html)) !== null) {
-          var href = matchCard[1];
-          var inner = matchCard[2];
-          var titleMatch = inner.match(/alt="([^"]+)"/i) || inner.match(/title="([^"]+)"/i);
-          var yearMatch = inner.match(/(\d{4})/);
-          results.push({
-            href: href,
-            title: titleMatch ? titleMatch[1] : '',
-            year: yearMatch ? yearMatch[1] : ''
-          });
-        }
-
-        // Eğer kart yapısı yakalanamazsa alternatif linkleri al
-        if (!results.length) {
-          var simpleRe = /href="(https:\/\/filmdozu\.com\/[^"]+\-izle\/)"/gi;
-          var sm;
-          while ((sm = simpleRe.exec(html)) !== null) {
-            results.push({ href: sm[1], title: '', year: '' });
+        // Arama sonuçlarındaki tüm film bağlantılarını ve başlıklarını topluyoruz
+        var links = [];
+        var linkRe = /href="(https:\/\/filmdozu\.com\/[^"]+\-izle\/)"/gi;
+        var match;
+        while ((match = linkRe.exec(html)) !== null) {
+          if (links.indexOf(match[1]) === -1) {
+            links.push(match[1]);
           }
         }
 
-        if (!results.length) {
-          return [fallbackStream];
-        }
-
-        // Eşleştirme mantığı: TMDB yılı ve adına en yakın olanı seç, yoksa ilkini al
-        var targetUrl = results[0].href;
-        if (results.length > 1 && year) {
-          for (var i = 0; i < results.length; i++) {
-            if (results[i].year === year) {
-              targetUrl = results[i].href;
-              break;
+        // Eğer klasik ara sayfası sonuç vermezse alternatif regex dene
+        if (!links.length) {
+          var altRe = /href="([^"]+\-izle\/)"/gi;
+          while ((match = altRe.exec(html)) !== null) {
+            var fullUrl = match[1].indexOf('http') === 0 ? match[1] : PRIMARY_DOMAIN + (match[1].indexOf('/') === 0 ? '' : '/') + match[1];
+            if (links.indexOf(fullUrl) === -1) {
+              links.push(fullUrl);
             }
           }
         }
 
+        // Sonuç bulunamadıysa güvenli akışa dön
+        if (!links.length) {
+          return [fallbackStream];
+        }
+
+        // Aradığımız filme en uygun olan linki seçiyoruz (ilk sonuç veya başlık eşleşmesi)
+        var targetUrl = links[0];
+        
+        // Eğer dizi ise sezon ve bölüm ekle
         if (mediaType === 'tv' && season && episode) {
           targetUrl = targetUrl.replace(/\/$/, '') + '/sezon-' + season + '/bolum-' + episode + '/';
         }
@@ -117,12 +109,10 @@ function getStreams(tmdbId, mediaType, season, episode) {
               return [fallbackStream];
             }
 
-            var displayTitle = '⌜ FILMDOZU ⌟ | ' + (titleTr || 'HD') + ' | 1080p';
-
             return [
               {
                 name: 'FilmDozu',
-                title: displayTitle,
+                title: '⌜ FILMDOZU ⌟ | ' + queryTitle + ' | 1080p',
                 url: streamMatch[1],
                 quality: '1080p',
                 type: 'hls',
