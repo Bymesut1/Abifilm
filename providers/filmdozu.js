@@ -1,7 +1,6 @@
 import {
     TvType,
     BaseProvider,
-    loadHtml,
 } from '@nativeseeker/plugin-sdk';
 
 export default class FilmDozuProvider extends BaseProvider {
@@ -11,30 +10,9 @@ export default class FilmDozuProvider extends BaseProvider {
     mainUrl = 'https://filmdozu.com';
 
     async search(query) {
-        try {
-            const res = await this.client.get(`${this.mainUrl}/?s=${encodeURIComponent(query)}`);
-            const $ = loadHtml(res.data);
-            const results = [];
-
-            $('article, .item, .film-item, .box').each((i, el) => {
-                const title = $(el).find('h2, .title, a').first().text().trim();
-                const url = $(el).find('a').attr('href');
-                const posterUrl = $(el).find('img').attr('data-src') \vert{}\vert{}$(el).find('img').attr('src');
-
-                if (url && title) {
-                    results.push({
-                        title: title,
-                        url: url,
-                        posterUrl: posterUrl || '',
-                        type: TvType.Movie
-                    });
-                }
-            });
-
-            return results;
-        } catch (e) {
-            return [];
-        }
+        // Arama kısmındaki takılmaları önlemek için şimdilik boş dönüyoruz,
+        // böylece uygulama çökmez ve "Alınıyor..." döngüsüne girmez.
+        return [];
     }
 
     async getUrl(url) {
