@@ -16,10 +16,8 @@ export default class FilmDozuProvider extends BaseProvider {
             const $ = loadHtml(res.data);
             const results = [];
 
-            // Güvenli seçici yapısı
-            $('article, .item, .film-item').each((i, el) => {
-                const titleNode = $(el).find('h2, .title, a').first();
-                const title = titleNode.text().trim();
+            $('article, .item, .film-item, .box').each((i, el) => {
+                const title = $(el).find('h2, .title, a').first().text().trim();
                 const url = $(el).find('a').attr('href');
                 const posterUrl = $(el).find('img').attr('data-src') \vert{}\vert{}$(el).find('img').attr('src');
 
